@@ -300,6 +300,20 @@ struct Session: Codable {
     var isUp: Bool { remaining <= 0 }
 }
 
+/// What Clawd holds while you are in a sitting.
+enum Prop: String {
+    case laptop     // studies alongside you — the body-doubling reading
+    case whip       // supervises you — the other reading
+    case none
+
+    static func load() -> Prop {
+        let f = NSString(string: "~/.claude/clawd/prop").expandingTildeInPath
+        let raw = ((try? String(contentsOfFile: f, encoding: .utf8)) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return Prop(rawValue: raw) ?? .laptop
+    }
+}
+
 enum Phase {
     case idle
     case picking(String)      // task id, choosing a duration
@@ -361,6 +375,7 @@ final class ClawdView: NSView {
     /// Off by default. Looping motion beside something you are reading is the
     /// first thing ADHD design guidance says to drop.
     var animate = false
+    var prop: Prop = .laptop
 
     fileprivate var beat: Beat?
     fileprivate var beatAt: CGFloat = 0
@@ -860,6 +875,21 @@ final class ClawdView: NSView {
 
         body.draw(c, at: CGPoint(x: x, y: y), px: px)
 
+        // Something in its hands while you work — otherwise it just sits there.
+        if case .running = phase, !collapsed {
+            switch prop {
+            case .laptop:
+                // Overlaps the body by 3 cells so both eyes stay clear of it.
+                ClawdSprites.studyLaptop.draw(c, at: CGPoint(x: x + sz.width - px * 3, y: y),
+                                              px: px)
+            case .whip:
+                ClawdSprites.whip.draw(c, at: CGPoint(x: x + sz.width - px * 3,
+                                                      y: y + px), px: px)
+            case .none:
+                break
+            }
+        }
+
         // Props need room the collapsed sticker does not have, so they are
         // expanded-panel only; the pose and eye changes carry it when collapsed.
         if !collapsed {
@@ -1040,6 +1070,7 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         view.t += 1.0 / 10.0
         view.animate = FileManager.default.fileExists(
             atPath: NSString(string: "~/.claude/shared/motion").expandingTildeInPath)
+        view.prop = Prop.load()
         view.stepBeats()
 
         let m = NSEvent.mouseLocation
@@ -1315,8 +1346,10 @@ func renderSheet(to path: String) {
     let cells: [(String, NSImage)] = [
         ("待命 · 选任务", renderPanel(.idle, collapsed: false, tasks: tasks, giveups: 0, t: 0.9)),
         ("选时长", renderPanel(.picking(ids[2]), collapsed: false, tasks: tasks, giveups: 0, t: 0.9)),
-        ("陪着 · 休息锁着", renderPanel(.running(running), collapsed: false, tasks: tasks,
-                                    giveups: 0, t: 0.9)),
+        ("陪着 · 抱电脑", renderPanel(.running(running), collapsed: false, tasks: tasks,
+                                  giveups: 0, t: 0.9) { $0.prop = .laptop }),
+        ("陪着 · 拿皮鞭", renderPanel(.running(running), collapsed: false, tasks: tasks,
+                                  giveups: 0, t: 0.9) { $0.prop = .whip }),
         ("这一段结束了", renderPanel(.finished(finished), collapsed: false, tasks: tasks,
                                 giveups: 1, t: 0.5)),
         ("重启后：等你确认", renderPanel(.paused(running), collapsed: false, tasks: tasks,

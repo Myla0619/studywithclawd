@@ -72,7 +72,10 @@ enum ClawdSprites {
         "B": ClawdColor.darker,
         "G": ClawdColor.code,
         "g": ClawdColor.gold,
-        "C": ClawdColor.cloth
+        "C": ClawdColor.cloth,
+        "W": NSColor(srgbRed: 0.827, green: 0.835, blue: 0.851, alpha: 1),   // text on screen
+        "w": NSColor(srgbRed: 0.722, green: 0.549, blue: 0.353, alpha: 1),   // whip lash
+        "h": NSColor(srgbRed: 0.361, green: 0.227, blue: 0.145, alpha: 1)    // whip handle
     ]
 
     /// Blocky body, four stubby legs, eyes as plain squares — no mouth.
@@ -134,6 +137,28 @@ enum ClawdSprites {
         "D..G.G...G..D",
         "DDDDDDDDDDDDD",
         "BBBBBBBBBBBBB"
+    ], map: palette)
+
+    /// 13 x 8 laptop with lines of notes, for when it studies alongside you.
+    static let studyLaptop = Sprite(rows: [
+        "DDDDDDDDDDDDD",
+        "D.WWWWWWW...D",
+        "D.WWWW......D",
+        "D.WWWWWWWW..D",
+        "D.WWWWW.....D",
+        "D.WWWWWWW...D",
+        "DDDDDDDDDDDDD",
+        "BBBBBBBBBBBBB"
+    ], map: palette)
+
+    /// 12 x 6 whip, mid-crack. Two cells thick so the lash reads at this size.
+    static let whip = Sprite(rows: [
+        "..........ww",
+        "........ww..",
+        "......ww....",
+        "....ww......",
+        "hhhww.......",
+        "hhh........."
     ], map: palette)
 
     /// 5 x 5 gold twinkle.

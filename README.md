@@ -17,6 +17,8 @@
 
 **专注计时**：点任务右边 ▶ 选时长（15/25/45/60，或直接输入分钟数）。计时期间「休息」按钮是锁着的。时间到了会响一声，然后给你两个选择：休息一下，或者再来一段。
 
+计时期间 Clawd 会在旁边拿点东西：默认抱着电脑陪你一起写（body doubling 的做法），想要凶一点的可以换成皮鞭：`clawd.sh prop whip`。
+
 **每天一份汇总**：`clawd.sh summary` 输出一份 Markdown，每天一节，记录专注时长、完成情况和最长的一段。从日志文件实时生成，不会跟数据对不上。
 
 ## 几条刻意的设计
@@ -68,6 +70,7 @@ launchctl load ~/Library/LaunchAgents/com.clawd.study.plist
 ```
 clawd.sh start | stop | restart | toggle
 clawd.sh motion [on|off]     动画开关（同时管两只）
+clawd.sh prop [laptop|whip|none]  伴学时 Clawd 手上拿什么
 clawd.sh find                面板找不到时把它叫回来（展开 + 回默认位置 + 置顶）
 clawd.sh summary             打印每日汇总
 clawd.sh today               今天的原始 JSON

@@ -43,6 +43,14 @@ case "${1:-start}" in
       *)   [ -f "$F" ] && echo "当前：动画开启" || echo "当前：静止" ;;
     esac ;;
 
+  prop)
+    # 伴学时 Clawd 手上拿什么
+    F="$DIR/prop"
+    case "$2" in
+      laptop|whip|none) printf '%s' "$2" > "$F"; echo "已换成：$2" ;;
+      *) echo "当前：$(cat "$F" 2>/dev/null || echo laptop)   可选 laptop | whip | none" ;;
+    esac ;;
+
   find)
     # 面板被别的窗口埋了就用这个：展开 + 回默认位置 + 置顶
     mkdir -p "$DIR"; : > "$DIR/find"
@@ -60,5 +68,5 @@ case "${1:-start}" in
       && echo "编译好了，跑 clawd.sh restart 生效" ;;
 
   *)
-    echo "用法: clawd.sh start|stop|restart|toggle|motion [on|off]|find|today|summary|build"; exit 1 ;;
+    echo "用法: clawd.sh start|stop|restart|toggle|motion [on|off]|prop [laptop|whip|none]|find|today|summary|build"; exit 1 ;;
 esac
