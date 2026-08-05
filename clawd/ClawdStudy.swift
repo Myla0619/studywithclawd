@@ -972,8 +972,10 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = true
-        window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Same level as the Claude Code pet. At .floating it kept getting buried
+        // under whatever app was in front, which makes a companion useless.
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
 
         view = ClawdView(frame: window.contentLayoutRect)
         view.store = store
@@ -1022,6 +1024,19 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     // MARK: Loop
 
     private func tick() {
+        // `clawd.sh find` drops this file when you cannot spot the panel:
+        // expand it, put it back at the default corner, bring it to front.
+        if FileManager.default.fileExists(atPath: root + "/find") {
+            try? FileManager.default.removeItem(atPath: root + "/find")
+            try? FileManager.default.removeItem(atPath: root + "/collapsed")
+            view.collapsed = false
+            resize()
+            window.setFrameOrigin(defaultPos())
+            clampOnScreen()
+            savePos()
+            window.orderFrontRegardless()
+        }
+
         view.t += 1.0 / 10.0
         view.animate = FileManager.default.fileExists(
             atPath: NSString(string: "~/.claude/shared/motion").expandingTildeInPath)

@@ -43,6 +43,12 @@ case "${1:-start}" in
       *)   [ -f "$F" ] && echo "当前：动画开启" || echo "当前：静止" ;;
     esac ;;
 
+  find)
+    # 面板被别的窗口埋了就用这个：展开 + 回默认位置 + 置顶
+    mkdir -p "$DIR"; : > "$DIR/find"
+    if ! pgrep -qx clawd 2>/dev/null; then nohup "$DIR/clawd" >/dev/null 2>&1 & fi
+    echo "已把面板叫回屏幕左上角" ;;
+
   summary)
     cat "$DIR/summary.md" 2>/dev/null || echo "还没有汇总" ;;
 
@@ -54,5 +60,5 @@ case "${1:-start}" in
       && echo "编译好了，跑 clawd.sh restart 生效" ;;
 
   *)
-    echo "用法: clawd.sh start|stop|restart|toggle|motion [on|off]|today|summary|build"; exit 1 ;;
+    echo "用法: clawd.sh start|stop|restart|toggle|motion [on|off]|find|today|summary|build"; exit 1 ;;
 esac

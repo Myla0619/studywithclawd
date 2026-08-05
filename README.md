@@ -68,12 +68,15 @@ launchctl load ~/Library/LaunchAgents/com.clawd.study.plist
 ```
 clawd.sh start | stop | restart | toggle
 clawd.sh motion [on|off]     动画开关（同时管两只）
+clawd.sh find                面板找不到时把它叫回来（展开 + 回默认位置 + 置顶）
 clawd.sh summary             打印每日汇总
 clawd.sh today               今天的原始 JSON
 clawd.sh build               改完源码重新编译
 ```
 
 面板本身：拖标题栏移动，点右上角 `—` 收起成贴纸大小，**双击贴纸**展开（单击是拖动，所以挪位置不会误触）。
+
+收起后的贴纸只有 112×76 且没有卡片底，桌面一乱很容易找不到——这时候 `clawd.sh find` 会把它展开、放回左上角并置顶。
 
 ## claude-pet（可选）
 
