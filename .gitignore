@@ -1,0 +1,19 @@
+# Personal data — never publish these
+clawd/days/
+clawd/summary.md
+clawd/session.json
+clawd/pos
+clawd/collapsed
+clawd/frame.png
+pet/s/
+pet/pos
+pet/hidden
+pet/quit
+pet/frame.png
+shared/motion
+
+# Build output
+clawd/clawd
+pet/claude-pet
+*.dSYM/
+.DS_Store

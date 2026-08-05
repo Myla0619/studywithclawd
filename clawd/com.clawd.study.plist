@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Optional: make Clawd start at login.
+
+  Install (this is a persistent system change, so run it yourself when you want it):
+    cp ~/.claude/clawd/com.clawd.study.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.clawd.study.plist
+
+  Remove:
+    launchctl unload ~/Library/LaunchAgents/com.clawd.study.plist
+    rm ~/Library/LaunchAgents/com.clawd.study.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clawd.study</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.claude/clawd/clawd</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>
