@@ -285,6 +285,11 @@ final class Store {
     var totalFocusSec: Int { day.tasks.reduce(0) { $0 + $1.focusedSec } }
     var doneCount: Int { day.tasks.filter(\.done).count }
     var longestSec: Int { day.longestSec ?? 0 }
+
+    /// Two hours of focus today and Clawd bulks up. Counts total focus, so
+    /// several short sittings get you there just as well as one long one.
+    static let buffThresholdSec = 2 * 60 * 60
+    var isBuff: Bool { totalFocusSec >= Store.buffThresholdSec }
 }
 
 // MARK: - Focus session
@@ -365,6 +370,7 @@ enum Hit {
 
 final class ClawdView: NSView {
     var store: Store!
+
     var phase: Phase = .idle
     var collapsed = false
     var t: CGFloat = 0
@@ -402,16 +408,20 @@ final class ClawdView: NSView {
 
     /// Runs one beat at a time, with a random gap in between.
     func stepBeats() {
-        guard animate else { beat = nil; return }
+        // Beats fire on their own during a sitting — they are occasional one-offs,
+        // not the looping ambient motion that `animate` controls. Every other
+        // phase stays completely still.
         guard case .running = phase else {
             beat = nil
-            nextBeat = t + 1.5
+            nextBeat = t + 4
             return
         }
         if let b = beat {
             if t - beatAt >= b.dur {
                 beat = nil
-                nextBeat = t + CGFloat.random(in: 2.0...5.0)
+                // Sparse by default; `motion on` makes it lively.
+                nextBeat = t + (animate ? CGFloat.random(in: 2.0...5.0)
+                                        : CGFloat.random(in: 8.0...20.0))
             }
             return
         }
@@ -546,6 +556,7 @@ final class ClawdView: NSView {
         let mins = store.totalFocusSec / 60
         var foot = "完成 \(store.doneCount) · 专注 \(mins) 分钟"
         if store.longestSec >= 60 { foot += " · 最长 \(store.longestSec / 60) 分钟" }
+        if store.isBuff { foot += " · 强壮形态" }
         text(foot, at: CGPoint(x: bounds.midX, y: y - 4), size: 10,
              color: NSColor(white: 0.95, alpha: 0.35), align: .center)
     }
@@ -864,7 +875,8 @@ final class ClawdView: NSView {
             if Int(t * 2) % 7 == 0 { face = .wide }
         }
 
-        let body = ClawdSprites.body(face, pose: pose)
+        let buff = store?.isBuff ?? false
+        let body = ClawdSprites.body(face, pose: pose, buff: buff)
         let sz = body.size(px: px)
         let x = cx - sz.width / 2 + shiftX * px
         let y = baseY + lift * px
@@ -888,6 +900,14 @@ final class ClawdView: NSView {
             case .none:
                 break
             }
+        }
+
+        // Earned biceps last, so the prop cannot cover them.
+        if buff {
+            let armY = y + sz.height * 0.42
+            ClawdSprites.arm(left: true).draw(c, at: CGPoint(x: x - px * 3, y: armY), px: px)
+            ClawdSprites.arm(left: false).draw(c, at: CGPoint(x: x + sz.width - px, y: armY),
+                                               px: px)
         }
 
         // Props need room the collapsed sticker does not have, so they are
@@ -1350,6 +1370,11 @@ func renderSheet(to path: String) {
                                   giveups: 0, t: 0.9) { $0.prop = .laptop }),
         ("陪着 · 拿皮鞭", renderPanel(.running(running), collapsed: false, tasks: tasks,
                                   giveups: 0, t: 0.9) { $0.prop = .whip }),
+        ("满 2 小时 · 强壮形态",
+            renderPanel(.running(running), collapsed: false,
+                        tasks: [StudyTask(id: "x", title: "复现 baseline",
+                                          done: false, focusedSec: 2 * 60 * 60)],
+                        giveups: 0, t: 0.9) { $0.prop = .laptop }),
         ("这一段结束了", renderPanel(.finished(finished), collapsed: false, tasks: tasks,
                                 giveups: 1, t: 0.5)),
         ("重启后：等你确认", renderPanel(.paused(running), collapsed: false, tasks: tasks,

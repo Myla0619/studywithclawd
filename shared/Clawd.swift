@@ -78,9 +78,26 @@ enum ClawdSprites {
         "h": NSColor(srgbRed: 0.361, green: 0.227, blue: 0.145, alpha: 1)    // whip handle
     ]
 
+    /// Buff form: brighter body, darker legs — reads sharper at the same size.
+    static let buffPalette: [Character: NSColor] = {
+        var p = palette
+        p["#"] = NSColor(srgbRed: 0.898, green: 0.451, blue: 0.298, alpha: 1)
+        p["l"] = NSColor(srgbRed: 0.573, green: 0.251, blue: 0.157, alpha: 1)
+        return p
+    }()
+
+    /// 4 x 5 bicep, drawn on either side. An overlay rather than a whole new
+    /// body, so it composes with every pose.
+    static func arm(left: Bool) -> Sprite {
+        Sprite(rows: left ? ["..##", ".###", "####", ".###", "..##"]
+                          : ["##..", "###.", "####", "###.", "##.."],
+               map: buffPalette)
+    }
+
     /// Blocky body, four stubby legs, eyes as plain squares — no mouth.
     /// Poses are separate sprites so the pixel grid never gets scaled.
-    static func body(_ face: ClawdFace, pose: ClawdPose = .normal) -> Sprite {
+    static func body(_ face: ClawdFace, pose: ClawdPose = .normal,
+                     buff: Bool = false) -> Sprite {
         var rows: [String]
         let e0: Int                      // top eye row
 
@@ -124,7 +141,7 @@ enum ClawdSprites {
         case .wide:      stamp(e0 - 1, [3, 4, 9, 10]); stamp(e0, [3, 4, 9, 10])
                          stamp(e1, [3, 4, 9, 10])
         }
-        return Sprite(rows: rows, map: palette)
+        return Sprite(rows: rows, map: buff ? buffPalette : palette)
     }
 
     /// 13 x 8 laptop showing </>, drawn in front of Clawd while it works.

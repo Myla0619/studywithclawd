@@ -157,10 +157,14 @@ final class PetView: NSView {
         enteredAt = t
     }
 
+    /// How long the finished-work report stays up before the pet slips away.
+    /// 7s was far too short to actually catch it.
+    var lingerSec: CGFloat = 60
+
     /// Internal transition: the celebration settles back down on its own.
     func tick(_ dt: CGFloat) {
         t += dt
-        if state == .done && stateTime > 7.0 { setState(.idle) }
+        if state == .done && stateTime > lingerSec { setState(.idle) }
         dragTilt *= 0.85
         needsDisplay = true
     }
@@ -620,6 +624,11 @@ final class Controller: NSObject, NSApplicationDelegate {
         // `pet.sh hide` still forces it off regardless.
         view.animate = FileManager.default.fileExists(
             atPath: NSString(string: "~/.claude/shared/motion").expandingTildeInPath)
+        let lf = NSString(string: "~/.claude/pet/linger").expandingTildeInPath
+        if let raw = try? String(contentsOfFile: lf, encoding: .utf8),
+           let n = Double(raw.trimmingCharacters(in: .whitespacesAndNewlines)), n > 0 {
+            view.lingerSec = CGFloat(n)
+        }
         let forcedOff = FileManager.default.fileExists(atPath: hiddenURL.path)
         setVisible(!forcedOff && view.state != .idle)
 
@@ -710,6 +719,26 @@ func renderContactSheet(to path: String) {
     }
 }
 
+/// Headless check that the finished-work report stays up as long as it claims.
+/// The shared session directory is unusable for this — other Claude sessions on
+/// the machine keep writing to it.
+func traceLinger(_ secs: Double) {
+    let v = PetView(frame: NSRect(x: 0, y: 0, width: 112, height: 76))
+    v.lingerSec = CGFloat(secs)
+    v.setState(.done)
+    var flippedAt: Double?
+    for i in 1...Int((secs + 30) * 10) {
+        v.tick(0.1)
+        if v.state == .idle, flippedAt == nil { flippedAt = Double(i) / 10 }
+    }
+    if let f = flippedAt {
+        print(String(format: "设定 %.0fs → 实际 %.1fs 后收起  %@",
+                     secs, f, abs(f - secs) < 0.3 ? "✓" : "✗ 偏差过大"))
+    } else {
+        print("✗ 一直没收起")
+    }
+}
+
 // MARK: - Entry point
 
 @main
@@ -719,6 +748,10 @@ enum PetApp {
         app.setActivationPolicy(.accessory)   // no Dock icon, no menu bar
 
         let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--trace-linger"), i + 1 < args.count {
+            traceLinger(Double(args[i + 1]) ?? 60)
+            exit(0)
+        }
         if let i = args.firstIndex(of: "--sheet"), i + 1 < args.count {
             renderContactSheet(to: args[i + 1])
             exit(0)

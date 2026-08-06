@@ -40,6 +40,12 @@ case "$1" in
   toggle)
     if [ -f "$DIR/hidden" ]; then rm -f "$DIR/hidden"; else : > "$DIR/hidden"; fi
     launch; exit 0 ;;
+  linger)
+    # 干完之后那条汇报停留几秒（默认 60）
+    if [ -n "$2" ]; then printf '%s' "$2" > "$DIR/linger"; echo "汇报停留 $2 秒"
+    else echo "当前 $(cat "$DIR/linger" 2>/dev/null || echo 60) 秒"; fi
+    exit 0 ;;
+
   quit)
     : > "$DIR/quit"; exit 0 ;;
   reset)

@@ -19,13 +19,17 @@
 
 计时期间 Clawd 会在旁边拿点东西：默认抱着电脑陪你一起写（body doubling 的做法），想要凶一点的可以换成皮鞭：`clawd.sh prop whip`。
 
+**练出肌肉。** 一天累计专注满 2 小时，Clawd 会变成强壮形态：颜色更亮更清晰，两侧长出肱二头肌。累计的，几个短段拼起来也算数。
+
 **每天一份汇总**：`clawd.sh summary` 输出一份 Markdown，每天一节，记录专注时长、完成情况和最长的一段。从日志文件实时生成，不会跟数据对不上。
 
 ## 几条刻意的设计
 
 做之前查了面向 ADHD 的产品设计资料，有几条直接改变了实现：
 
-**默认完全静止。** 循环动画是这类指南里第一个要砍的东西——余光里不停动的东西会持续抢注意力。所以 Clawd 平时一动不动，只有状态切换和结束时的一次短庆祝会动。想要动画版（伸懒腰、喝咖啡、打盹惊醒等 8 种随机小动作）可以手动开：
+**默认几乎不动。** 循环动画是这类指南里第一个要砍的东西——余光里不停动的东西会持续抢注意力。所以没有持续的呼吸起伏，待命时完全静止。
+
+只有**计时期间**会有 8 种随机小动作（伸懒腰、喝咖啡、打盹惊醒等），平均 16 秒来一个——那是偶发的一次性动作，不是循环动效，而且那时候你本来就在专注。想让它更活泼（约 5 秒一个，并加上持续起伏）：
 
 ```bash
 clawd.sh motion on
@@ -71,6 +75,7 @@ launchctl load ~/Library/LaunchAgents/com.clawd.study.plist
 clawd.sh start | stop | restart | toggle
 clawd.sh motion [on|off]     动画开关（同时管两只）
 clawd.sh prop [laptop|whip|none]  伴学时 Clawd 手上拿什么
+pet.sh linger [秒]           挂件那条"干完了"停留多久（默认 60）
 clawd.sh find                面板找不到时把它叫回来（展开 + 回默认位置 + 置顶）
 clawd.sh summary             打印每日汇总
 clawd.sh today               今天的原始 JSON
@@ -83,7 +88,7 @@ clawd.sh build               改完源码重新编译
 
 ## claude-pet（可选）
 
-给 [Claude Code](https://claude.com/claude-code) 用的进度挂件。Claude 开始干活时它出现在角落，底下一行字说明正在做什么（`改 keys.py`、`跑 pytest 3/7`），干完变成本轮总结（`58 步 · 5:02`），然后自己消失。
+给 [Claude Code](https://claude.com/claude-code) 用的进度挂件。Claude 开始干活时它出现在角落，底下一行字说明正在做什么（`改 keys.py`、`跑 pytest 3/7`），干完变成本轮总结（`58 步 · 5:02`），**停留 60 秒**让你来得及看见，然后自己消失。`pet.sh linger 120` 可以调更久。
 
 ![干活挂件](docs/pet.png)
 
@@ -117,7 +122,8 @@ clawd.sh build               改完源码重新编译
 clawd/clawd --sheet out.png     # 所有面板状态渲染成一张图
 clawd/clawd --beats out.png     # 所有随机小动作
 clawd/clawd --trace 600         # 纯内存模拟 10 分钟，打印触发了哪些动作
-pet/claude-pet --sheet out.png  # 挂件的所有状态
+pet/claude-pet --sheet out.png        # 挂件的所有状态
+pet/claude-pet --trace-linger 60      # 验证汇报停留时长
 ```
 
 **点击穿透**：挂件只在鼠标真正压在 Clawd 身上时才拦截点击，其余时候整个窗口穿透，不挡你点桌面上的东西。靠轮询光标坐标实现，不需要辅助功能权限。
