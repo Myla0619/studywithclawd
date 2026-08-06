@@ -78,7 +78,8 @@ enum ClawdSprites {
         "z": NSColor(srgbRed: 0.780, green: 0.843, blue: 0.925, alpha: 1),   // sleepy Z
         "W": NSColor(srgbRed: 0.827, green: 0.835, blue: 0.851, alpha: 1),   // text on screen
         "w": NSColor(srgbRed: 0.722, green: 0.549, blue: 0.353, alpha: 1),   // whip lash
-        "h": NSColor(srgbRed: 0.361, green: 0.227, blue: 0.145, alpha: 1)    // whip handle
+        "h": NSColor(srgbRed: 0.361, green: 0.227, blue: 0.145, alpha: 1),   // whip handle
+        "s": NSColor(srgbRed: 0.078, green: 0.086, blue: 0.106, alpha: 1)    // monitor screen
     ]
 
     /// Buff form: brighter body, darker legs — reads sharper at the same size.
@@ -151,6 +152,61 @@ enum ClawdSprites {
             stamp(e0 - 2, e0 + 3, L + R)
         }
         return Sprite(rows: rows, map: buff ? buffPalette : palette)
+    }
+
+    /// 28 x 21. Clawd sitting inside a monitor — the Claude Code pet wears this
+    /// so it can never be mistaken for the bare Clawd in the study panel.
+    static func terminal(_ face: ClawdFace, code: Bool = true) -> Sprite {
+        var rows = [
+            "DDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+            "DDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+            "DDssssssssssssssssssssssssDD",
+            "DDssGGGGGGssssssssssssssssDD",
+            "DDssGGGGssssssssssssssssssDD",
+            "DDssssssssssssssssssssssssDD",
+            "DDssssssssssssssssssssssssDD",
+            "DDssssssss########ssssssssDD",
+            "DDssssss############ssssssDD",
+            "DDsssss##############sssssDD",
+            "DDssss################ssssDD",
+            "DDssss################ssssDD",
+            "DDssss################ssssDD",
+            "DDssss################ssssDD",
+            "DDssss################ssssDD",
+            "DDsssssllssllssllssllsssssDD",
+            "DDsssssllssllssllssllsssssDD",
+            "DDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+            "DDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+            "..........DDDDDDDD..........",
+            "......DDDDDDDDDDDDDDDD......"
+        ]
+        if !code {                                  // blank screen when idle
+            rows[3] = rows[3].replacingOccurrences(of: "G", with: "s")
+            rows[4] = rows[4].replacingOccurrences(of: "G", with: "s")
+        }
+
+        func stamp(_ r0: Int, _ r1: Int, _ cols: [Int]) {
+            guard r0 <= r1 else { return }
+            for r in r0...r1 where r >= 0 && r < rows.count {
+                var ch = Array(rows[r])
+                for c in cols where c >= 0 && c < ch.count { ch[c] = "@" }
+                rows[r] = String(ch)
+            }
+        }
+        switch face {
+        case .happy:
+            stamp(10, 10, [10, 11, 16, 17])
+            stamp(11, 11, [9, 10, 17, 18])
+        case .blink:
+            stamp(11, 11, [8, 9, 10, 11, 16, 17, 18, 19])
+        case .narrow:
+            stamp(11, 11, [9, 10, 17, 18])
+        case .wide:
+            stamp(9, 11, [9, 10, 17, 18])
+        default:
+            stamp(10, 11, [9, 10, 17, 18])
+        }
+        return Sprite(rows: rows, map: palette)
     }
 
     /// 8 x 10 bicep, drawn on either side. An overlay rather than a whole new

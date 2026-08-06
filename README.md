@@ -4,8 +4,10 @@
 
 两个独立的小程序，共用同一只 Clawd：
 
-- **clawd** — 学习陪伴面板：今日清单、每项任务的专注计时、每天一份汇总
-- **claude-pet** — Claude Code 的进度挂件：Claude 在干活时冒出来报告进度，闲着自动消失
+- **clawd** — 学习陪伴面板：今日清单、每项任务的专注计时、每天一份汇总。**裸的 Clawd**
+- **claude-pet** — Claude Code 的进度挂件：Claude 在干活时冒出来报告进度，闲着自动消失。**显示器里的 Clawd**
+
+两只造型刻意做得不一样：学习那只就是 Clawd 本体，Claude Code 那只是一台显示器、Clawd 坐在屏幕里。同屏摆着也不会认错。
 
 原生 Swift + AppKit，单文件，无第三方依赖。只需要 Xcode Command Line Tools。
 
@@ -88,7 +90,7 @@ clawd.sh build               改完源码重新编译
 
 ## claude-pet（可选）
 
-给 [Claude Code](https://claude.com/claude-code) 用的进度挂件。Claude 开始干活时它出现在角落，底下一行字说明正在做什么（`改 keys.py`、`跑 pytest 3/7`），干完变成本轮总结（`58 步 · 5:02`），**停留 60 秒**让你来得及看见，然后自己消失。`pet.sh linger 120` 可以调更久。
+给 [Claude Code](https://claude.com/claude-code) 用的进度挂件，造型是**一台显示器、Clawd 坐在屏幕里**——干活时屏幕上会亮起绿色代码行，闲着屏幕就是黑的。Claude 开始干活时它出现在角落，底下一行字说明正在做什么（`改 keys.py`、`跑 pytest 3/7`），干完变成本轮总结（`58 步 · 5:02`），**停留 60 秒**让你来得及看见，然后自己消失。`pet.sh linger 120` 可以调更久。
 
 ![干活挂件](docs/pet.png)
 

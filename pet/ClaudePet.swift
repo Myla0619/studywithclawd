@@ -278,16 +278,12 @@ final class PetView: NSView {
         if patT < 1.2 { face = .happy }
         if isDragging { face = .narrow }
 
-        let body = ClawdSprites.body(face)
+        // The pet is Clawd inside a monitor; the study panel is the bare Clawd.
+        // Different silhouettes, so a glance is enough to tell them apart.
+        let body = ClawdSprites.terminal(face, code: state == .working)
         let bodyW = CGFloat(body.w) * px
         let bodyH = CGFloat(body.h) * px
-
-        // Working means a laptop in front, which widens the group.
-        let showLaptop = (state == .working && !isDragging)
-        let lap = ClawdSprites.laptop
-        let lapW = CGFloat(lap.w) * px
-        let groupW = showLaptop ? bodyW + lapW - px * 6 : bodyW
-        let gx = ((cx - groupW / 2) / px).rounded() * px
+        let gx = ((cx - bodyW / 2) / px).rounded() * px
         let by = groundY + lift * px
 
         // Contact shadow, in pixel steps too.
@@ -295,12 +291,10 @@ final class PetView: NSView {
         ctx.fill(CGRect(x: gx + px * 2, y: groundY - px, width: bodyW - px * 4, height: px))
 
         body.draw(ctx, at: CGPoint(x: gx, y: by), px: px)
-        if showLaptop {
-            lap.draw(ctx, at: CGPoint(x: gx + bodyW - px * 6, y: by), px: px)
-        }
         if state == .waiting {
+            // Hangs off the monitor's top-right corner.
             ClawdSprites.question.draw(ctx,
-                at: CGPoint(x: gx + bodyW - px * 4, y: by + bodyH - px * 6), px: px)
+                at: CGPoint(x: gx + bodyW - px * 5, y: by + bodyH - px * 7), px: px)
         }
 
         drawSparkles(ctx, cx: cx, top: by + bodyH, px: px)
