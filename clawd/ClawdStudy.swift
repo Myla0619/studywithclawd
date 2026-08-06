@@ -806,7 +806,8 @@ final class ClawdView: NSView {
 
     /// Clawd, in pixels. Same sprite the Claude Code pet uses.
     private func drawClawd(_ c: CGContext, cx: CGFloat, baseY: CGFloat, scale: CGFloat) {
-        let px = (6 * scale).rounded()
+        // 28-cell grid: 3pt cells in the panel, 2pt in the sticker.
+        let px: CGFloat = scale >= 0.9 ? 3 : 2
 
         var pose: ClawdPose = .normal
         var face: ClawdFace = .open
@@ -882,8 +883,8 @@ final class ClawdView: NSView {
         let y = baseY + lift * px
 
         c.setFillColor(NSColor(white: 0, alpha: lift > 0 ? 0.12 : 0.20).cgColor)
-        c.fill(CGRect(x: cx - sz.width / 2 + px, y: baseY - px,
-                      width: sz.width - px * 2, height: px))
+        c.fill(CGRect(x: cx - sz.width / 2 + px * 2, y: baseY - px,
+                      width: sz.width - px * 4, height: px))
 
         body.draw(c, at: CGPoint(x: x, y: y), px: px)
 
@@ -892,11 +893,11 @@ final class ClawdView: NSView {
             switch prop {
             case .laptop:
                 // Overlaps the body by 3 cells so both eyes stay clear of it.
-                ClawdSprites.studyLaptop.draw(c, at: CGPoint(x: x + sz.width - px * 3, y: y),
+                ClawdSprites.studyLaptop.draw(c, at: CGPoint(x: x + sz.width - px * 6, y: y),
                                               px: px)
             case .whip:
-                ClawdSprites.whip.draw(c, at: CGPoint(x: x + sz.width - px * 3,
-                                                      y: y + px), px: px)
+                ClawdSprites.whip.draw(c, at: CGPoint(x: x + sz.width - px * 6,
+                                                      y: y + px * 2), px: px)
             case .none:
                 break
             }
@@ -905,8 +906,8 @@ final class ClawdView: NSView {
         // Earned biceps last, so the prop cannot cover them.
         if buff {
             let armY = y + sz.height * 0.42
-            ClawdSprites.arm(left: true).draw(c, at: CGPoint(x: x - px * 3, y: armY), px: px)
-            ClawdSprites.arm(left: false).draw(c, at: CGPoint(x: x + sz.width - px, y: armY),
+            ClawdSprites.arm(left: true).draw(c, at: CGPoint(x: x - px * 6, y: armY), px: px)
+            ClawdSprites.arm(left: false).draw(c, at: CGPoint(x: x + sz.width - px * 2, y: armY),
                                                px: px)
         }
 
@@ -914,7 +915,7 @@ final class ClawdView: NSView {
         // expanded-panel only; the pose and eye changes carry it when collapsed.
         if !collapsed {
             if showCup {
-                ClawdSprites.cup.draw(c, at: CGPoint(x: x + sz.width - px * 4, y: baseY), px: px)
+                ClawdSprites.cup.draw(c, at: CGPoint(x: x + sz.width - px * 8, y: baseY), px: px)
             }
             if showZzz {
                 let p = t - beatAt
@@ -922,13 +923,13 @@ final class ClawdView: NSView {
                     let q = p - CGFloat(i) * 0.55
                     guard q > 0 else { continue }
                     let rise = min(CGFloat(4), (q * 4).rounded()) * px * 0.5
-                    ClawdSprites.zed.draw(c, at: CGPoint(x: x + sz.width - px * 3 + CGFloat(i) * px * 1.4,
-                                                        y: y + sz.height - px + rise),
+                    ClawdSprites.zed.draw(c, at: CGPoint(x: x + sz.width - px * 6 + CGFloat(i) * px * 2.8,
+                                                        y: y + sz.height - px * 2 + rise),
                                           px: px * (i == 0 ? 0.7 : (i == 1 ? 1.0 : 1.3)))
                 }
             }
             if showBang {
-                ClawdSprites.bang.draw(c, at: CGPoint(x: x + sz.width - px, y: y + sz.height),
+                ClawdSprites.bang.draw(c, at: CGPoint(x: x + sz.width - px * 2, y: y + sz.height),
                                        px: px)
             }
         }

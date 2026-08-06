@@ -149,7 +149,7 @@ final class PetView: NSView {
 
     /// Only this area swallows clicks; everything else stays click-through.
     var hitRegion: CGRect {
-        CGRect(x: bounds.midX - 38, y: 4, width: 76, height: 68)
+        CGRect(x: bounds.midX - 40, y: 4, width: 80, height: 78)
     }
 
     func setState(_ s: PetState) {
@@ -244,9 +244,9 @@ final class PetView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.clear(bounds)
 
-        let px: CGFloat = 3
+        let px: CGFloat = 2          // 28-cell grid at 2pt a cell
         let cx = bounds.midX
-        let groundY: CGFloat = 30
+        let groundY: CGFloat = 26
 
         // Motion is quantised to whole pixels so the sprite never blurs.
         var lift: CGFloat = 0
@@ -286,21 +286,21 @@ final class PetView: NSView {
         let showLaptop = (state == .working && !isDragging)
         let lap = ClawdSprites.laptop
         let lapW = CGFloat(lap.w) * px
-        let groupW = showLaptop ? bodyW + lapW - px * 3 : bodyW
+        let groupW = showLaptop ? bodyW + lapW - px * 6 : bodyW
         let gx = ((cx - groupW / 2) / px).rounded() * px
         let by = groundY + lift * px
 
         // Contact shadow, in pixel steps too.
         ctx.setFillColor(NSColor(white: 0.05, alpha: lift > 0 ? 0.10 : 0.16).cgColor)
-        ctx.fill(CGRect(x: gx + px, y: groundY - px, width: bodyW - px * 2, height: px))
+        ctx.fill(CGRect(x: gx + px * 2, y: groundY - px, width: bodyW - px * 4, height: px))
 
         body.draw(ctx, at: CGPoint(x: gx, y: by), px: px)
         if showLaptop {
-            lap.draw(ctx, at: CGPoint(x: gx + bodyW - px * 3, y: by), px: px)
+            lap.draw(ctx, at: CGPoint(x: gx + bodyW - px * 6, y: by), px: px)
         }
         if state == .waiting {
             ClawdSprites.question.draw(ctx,
-                at: CGPoint(x: gx + bodyW - px * 2, y: by + bodyH - px * 2), px: px)
+                at: CGPoint(x: gx + bodyW - px * 4, y: by + bodyH - px * 6), px: px)
         }
 
         drawSparkles(ctx, cx: cx, top: by + bodyH, px: px)
@@ -387,7 +387,7 @@ final class Controller: NSObject, NSApplicationDelegate {
     private var posURL: URL { URL(fileURLWithPath: dir + "/pos") }
     private var hiddenURL: URL { URL(fileURLWithPath: dir + "/hidden") }
 
-    private let size = NSSize(width: 112, height: 76)
+    private let size = NSSize(width: 112, height: 88)
     private var lastRaw = ""
     private var lastSeen = Date()
     private var dumpSignal: DispatchSourceSignal?
@@ -665,7 +665,7 @@ func renderCell(_ s: PetState, _ time: CGFloat, size: NSSize,
 }
 
 func renderContactSheet(to path: String) {
-    let cell = NSSize(width: 112, height: 76)
+    let cell = NSSize(width: 112, height: 88)
     typealias Frame = (PetState, CGFloat, String, ((PetView) -> Void)?)
     let frames: [Frame] = [
         (.idle, 0.9, "idle", nil),
