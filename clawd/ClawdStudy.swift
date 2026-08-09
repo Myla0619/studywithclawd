@@ -911,27 +911,30 @@ final class ClawdView: NSView {
                                                px: px)
         }
 
-        // Props need room the collapsed sticker does not have, so they are
-        // expanded-panel only; the pose and eye changes carry it when collapsed.
-        if !collapsed {
-            if showCup {
-                ClawdSprites.cup.draw(c, at: CGPoint(x: x + sz.width - px * 8, y: baseY), px: px)
+        // Props show in both sizes now. The sticker has no headroom above the
+        // body, so anything that would sit on top is moved out to the side.
+        if showCup {
+            ClawdSprites.cup.draw(c, at: CGPoint(x: x + sz.width - px * 8, y: baseY), px: px)
+        }
+        if showZzz {
+            let p = t - beatAt
+            for i in 0..<3 {
+                let q = p - CGFloat(i) * 0.55
+                guard q > 0 else { continue }
+                let rise = min(CGFloat(4), (q * 4).rounded()) * px * 0.5
+                let px2 = px * (i == 0 ? 0.7 : (i == 1 ? 1.0 : 1.3))
+                let at = collapsed
+                    ? CGPoint(x: x + sz.width - px * 2 + CGFloat(i) * px * 1.6,
+                              y: y + sz.height - px * 12 + rise)
+                    : CGPoint(x: x + sz.width - px * 6 + CGFloat(i) * px * 2.8,
+                              y: y + sz.height - px * 2 + rise)
+                ClawdSprites.zed.draw(c, at: at, px: px2)
             }
-            if showZzz {
-                let p = t - beatAt
-                for i in 0..<3 {
-                    let q = p - CGFloat(i) * 0.55
-                    guard q > 0 else { continue }
-                    let rise = min(CGFloat(4), (q * 4).rounded()) * px * 0.5
-                    ClawdSprites.zed.draw(c, at: CGPoint(x: x + sz.width - px * 6 + CGFloat(i) * px * 2.8,
-                                                        y: y + sz.height - px * 2 + rise),
-                                          px: px * (i == 0 ? 0.7 : (i == 1 ? 1.0 : 1.3)))
-                }
-            }
-            if showBang {
-                ClawdSprites.bang.draw(c, at: CGPoint(x: x + sz.width - px * 2, y: y + sz.height),
-                                       px: px)
-            }
+        }
+        if showBang {
+            let at = collapsed ? CGPoint(x: x + sz.width, y: y + sz.height - px * 12)
+                               : CGPoint(x: x + sz.width - px * 2, y: y + sz.height)
+            ClawdSprites.bang.draw(c, at: at, px: px)
         }
 
         if case .finished = phase {
@@ -1434,13 +1437,14 @@ func renderBeats(to path: String) {
         ("点头", .nod, 0.4)
     ]
 
+    let wantCollapsed = CommandLine.arguments.contains("--collapsed")
     let cells: [(String, NSImage)] = samples.map { name, b, p in
-        (name, renderPanel(.running(sess), collapsed: false, tasks: tasks,
+        (name, renderPanel(.running(sess), collapsed: wantCollapsed, tasks: tasks,
                            giveups: 0, t: 6.0) { $0.debugBeat(b, at: p) })
     }
 
     // Only the character band at the top of the panel is interesting here.
-    let band: CGFloat = 168
+    let band: CGFloat = wantCollapsed ? cells[0].1.size.height : 168
     let cols = 4, gap: CGFloat = 10, labelH: CGFloat = 18
     let cw = cells[0].1.size.width, ch = band
     let rows = (cells.count + cols - 1) / cols
