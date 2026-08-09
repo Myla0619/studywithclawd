@@ -79,7 +79,13 @@ enum ClawdSprites {
         "W": NSColor(srgbRed: 0.827, green: 0.835, blue: 0.851, alpha: 1),   // text on screen
         "w": NSColor(srgbRed: 0.722, green: 0.549, blue: 0.353, alpha: 1),   // whip lash
         "h": NSColor(srgbRed: 0.361, green: 0.227, blue: 0.145, alpha: 1),   // whip handle
-        "s": NSColor(srgbRed: 0.078, green: 0.086, blue: 0.106, alpha: 1)    // monitor screen
+        "s": NSColor(srgbRed: 0.078, green: 0.086, blue: 0.106, alpha: 1),   // monitor screen
+        "N": NSColor(srgbRed: 0.373, green: 0.392, blue: 0.427, alpha: 1),   // lamp stem
+        "P": NSColor(srgbRed: 0.804, green: 0.353, blue: 0.318, alpha: 1),   // book spines
+        "Q": NSColor(srgbRed: 0.365, green: 0.510, blue: 0.678, alpha: 1),
+        "R": NSColor(srgbRed: 0.831, green: 0.686, blue: 0.322, alpha: 1),
+        "V": NSColor(srgbRed: 0.365, green: 0.596, blue: 0.376, alpha: 1),   // leaves
+        "T": NSColor(srgbRed: 0.639, green: 0.408, blue: 0.286, alpha: 1)    // terracotta pot
     ]
 
     /// Buff form: brighter body, darker legs — reads sharper at the same size.
@@ -258,6 +264,46 @@ enum ClawdSprites {
         "hhhhww..................",
         "hhhh....................",
         "hhhh...................."
+    ], map: palette)
+
+    /// Desk scenery, so the study panel is not one plushie on an empty field.
+    /// All static — nothing here ever animates.
+    static let lamp = Sprite(rows: [
+        "...GGGGG..",
+        "..GGGGGGG.",
+        ".GGGGGGGGG",
+        "....NN....",
+        "....NN....",
+        "....NN....",
+        "....NN....",
+        "....NN....",
+        "....NN....",
+        "..NNNNNN.."
+    ], map: palette)
+
+    static let books = Sprite(rows: [
+        "................",
+        "..PPPPPPPPPPPP..",
+        "..PPPPPPPPPPPP..",
+        ".QQQQQQQQQQQQQ..",
+        ".QQQQQQQQQQQQQ..",
+        "..RRRRRRRRRRR...",
+        "..RRRRRRRRRRR..."
+    ], map: palette)
+
+    static let plant = Sprite(rows: [
+        "....VV......",
+        "..VVVVVV....",
+        ".VVVVVVVV...",
+        "VVVVVVVVVV..",
+        "..VVVVVV....",
+        "....VV......",
+        "....VV......",
+        "..TTTTTTTT..",
+        "..TTTTTTTT..",
+        "..TTTTTTTT..",
+        "...TTTTTT...",
+        "...TTTTTT..."
     ], map: palette)
 
     /// 10 x 10 gold twinkle.

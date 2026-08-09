@@ -19,6 +19,8 @@
 
 **专注计时**：点任务右边 ▶ 选时长（15/25/45/60，或直接输入分钟数）。计时期间「休息」按钮是锁着的。时间到了会响一声，然后给你两个选择：休息一下，或者再来一段。
 
+**书桌场景**：Clawd 坐在一张桌子后面，桌上有台灯、一摞书和一盆绿植。全是静态的，不会动，纯粹是让面板不那么空。不想要就 `clawd.sh scene off`。
+
 计时期间 Clawd 会在旁边拿点东西：默认抱着电脑陪你一起写（body doubling 的做法），想要凶一点的可以换成皮鞭：`clawd.sh prop whip`。
 
 **练出肌肉。** 一天累计专注满 2 小时，Clawd 会变成强壮形态：颜色更亮更清晰，两侧长出肱二头肌。累计的，几个短段拼起来也算数。
@@ -77,6 +79,7 @@ launchctl load ~/Library/LaunchAgents/com.clawd.study.plist
 clawd.sh start | stop | restart | toggle
 clawd.sh motion [on|off]     动画开关（同时管两只）
 clawd.sh prop [laptop|whip|none]  伴学时 Clawd 手上拿什么
+clawd.sh scene [on|off]      书桌场景（台灯/书堆/绿植）
 pet.sh linger [秒]           挂件那条"干完了"停留多久（默认 60）
 clawd.sh find                面板找不到时把它叫回来（展开 + 回默认位置 + 置顶）
 clawd.sh summary             打印每日汇总

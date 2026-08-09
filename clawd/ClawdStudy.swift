@@ -25,6 +25,8 @@ let kGreen   = NSColor(srgbRed: 0.290, green: 0.720, blue: 0.450, alpha: 1)
 let kRed     = NSColor(srgbRed: 0.851, green: 0.365, blue: 0.353, alpha: 1)
 let kText    = NSColor(white: 0.95, alpha: 1)
 let kDim     = NSColor(white: 0.95, alpha: 0.45)
+let kDesk    = NSColor(srgbRed: 0.376, green: 0.298, blue: 0.235, alpha: 1)
+let kDeskEdge = NSColor(srgbRed: 0.278, green: 0.216, blue: 0.169, alpha: 1)
 
 // MARK: - Drawing primitives
 
@@ -303,6 +305,14 @@ struct Session: Codable {
     var remaining: Int { Int(endsAt.timeIntervalSinceNow.rounded(.up)) }
     var elapsedSec: Int { max(0, Int(Date().timeIntervalSince(startedAt))) }
     var isUp: Bool { remaining <= 0 }
+}
+
+/// Desk scenery on/off. Static art only — it adds nothing that moves.
+enum Scene {
+    static var enabled: Bool {
+        !FileManager.default.fileExists(
+            atPath: NSString(string: "~/.claude/clawd/no-scene").expandingTildeInPath)
+    }
 }
 
 /// What Clawd holds while you are in a sitting.
@@ -877,14 +887,17 @@ final class ClawdView: NSView {
         }
 
         let buff = store?.isBuff ?? false
+        let scene = !collapsed && Scene.enabled
         let body = ClawdSprites.body(face, pose: pose, buff: buff)
         let sz = body.size(px: px)
         let x = cx - sz.width / 2 + shiftX * px
         let y = baseY + lift * px
 
-        c.setFillColor(NSColor(white: 0, alpha: lift > 0 ? 0.12 : 0.20).cgColor)
-        c.fill(CGRect(x: cx - sz.width / 2 + px * 2, y: baseY - px,
-                      width: sz.width - px * 4, height: px))
+        if !scene {
+            c.setFillColor(NSColor(white: 0, alpha: lift > 0 ? 0.12 : 0.20).cgColor)
+            c.fill(CGRect(x: cx - sz.width / 2 + px * 2, y: baseY - px,
+                          width: sz.width - px * 4, height: px))
+        }
 
         body.draw(c, at: CGPoint(x: x, y: y), px: px)
 
@@ -901,6 +914,22 @@ final class ClawdView: NSView {
             case .none:
                 break
             }
+        }
+
+        // The desk goes over Clawd's legs, which reads as sitting at it.
+        var deskTop = baseY
+        if scene {
+            let left = pad, right = bounds.width - pad
+            deskTop = baseY + px * 2
+            c.setFillColor(kDesk.cgColor)
+            c.fill(CGRect(x: left, y: deskTop - px * 3, width: right - left, height: px * 3))
+            c.setFillColor(kDeskEdge.cgColor)
+            c.fill(CGRect(x: left, y: deskTop - px * 4, width: right - left, height: px))
+
+            ClawdSprites.lamp.draw(c, at: CGPoint(x: left + px * 2, y: deskTop), px: px)
+            ClawdSprites.books.draw(c, at: CGPoint(x: left + px * 15, y: deskTop), px: px)
+            ClawdSprites.plant.draw(c,
+                at: CGPoint(x: right - CGFloat(ClawdSprites.plant.w) * px - px, y: deskTop), px: px)
         }
 
         // Earned biceps last, so the prop cannot cover them.
