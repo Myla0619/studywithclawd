@@ -676,15 +676,24 @@ function alertSheet(msg) {
 
 // ---------------------------------------------------------------- 别的
 function viewMore() {
+  var rows = [
+    ["cdList()",     "倒数日",       P.countdowns.length ? P.countdowns.length + " 个" : "还没有"],
+    ["manage()",     "管理状态",     P.activities.length + " 个"],
+    ["autoSet()",    "自动切换",     P.autoGrace < 0 ? "不接受"
+                                    : P.autoGrace === 0 ? "随便覆盖" : "保护 " + P.autoGrace + " 分钟"],
+    ["nudge()",      "定时问一句",   P.nudge === 0 ? "关着" : P.nudge + " 分钟"],
+    ["wantExport()", "导出一份备份", "存到「文件」"],
+    ["wantUpdate()", "检查更新",     "关掉窗口后查"]
+  ]
   var h = '<div class="card">'
-    + '<div class="link" onclick="manage()"><span>管理状态</span><span class="h">'
-    + P.activities.length + ' 个 ›</span></div>'
-    + '<div class="link" onclick="nudge()"><span>定时问一句</span><span class="h">'
-    + (P.nudge === 0 ? "关着" : P.nudge + " 分钟") + ' ›</span></div>'
-    + '<div class="link" onclick="wantExport()"><span>导出一份备份</span><span class="h">存到「文件」›</span></div>'
-    + '</div>'
+  for (var i = 0; i < rows.length; i++) {
+    h += '<div class="link" onclick="' + rows[i][0] + '"><span>' + esc(rows[i][1]) + '</span>'
+      + '<span class="h">' + esc(rows[i][2]) + ' ›</span></div>'
+  }
+  h += '</div>'
   h += '<div class="note">版本 ' + esc(P.version) + '</div>'
-  h += '<div class="note" style="padding-top:14px;line-height:1.5">改动在你关掉这个窗口时存盘，<br>每条都带自己发生的时间，晚存不影响记录</div>'
+  h += '<div class="note" style="padding-top:14px;line-height:1.5">'
+    + '每点一下就存一次，关掉窗口时再兜一遍<br>记的是你点的那一刻，不是关窗口的时刻</div>'
   return h
 }
 function manage() {

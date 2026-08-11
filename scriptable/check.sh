@@ -60,6 +60,23 @@ else
   echo "  ✓ 没有"
 fi
 
+echo "── 页面里定义了却没人调的函数"
+# 这条是补的：倒数日、自动切换、检查更新三个入口曾经写好了函数但没接进界面，
+# 语法全对、也测不出来（我测试时是直接调函数，没从界面点进去）。
+node -e '
+const H = require("./MylaView.js").HTML
+const i = H.indexOf("<script>"), j = H.lastIndexOf("</script>")
+const js = H.slice(i + 8, j)
+const defs = [...js.matchAll(/function ([A-Za-z_$][\w$]*)\s*\(/g)].map(m => m[1])
+const orphans = defs.filter(n => {
+  // 在整个页面里数，不能只数 <script> 里面——导航栏和弹层的 onclick 写在静态 HTML 上
+  const uses = H.split(new RegExp("\\b" + n + "\\b")).length - 1
+  return uses <= 1                       // 只出现在自己的定义里
+})
+if (orphans.length) { console.log("  ✗ 没人调：" + orphans.join("、")); process.exit(1) }
+console.log("  ✓ 都有人调")
+' || fail=1
+
 echo
 [ $fail -eq 0 ] && echo "全过 ✅" || echo "有问题 ❌"
 exit $fail
