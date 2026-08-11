@@ -72,7 +72,7 @@ async function refresh(table) {
     const r = new UITableRow()
     r.dismissOnSelect = false
     const c = r.addText(`✂︎ 这一段已经 ${C.hhmm(C.duration(open, now))}，中间换过吗？`)
-    c.titleColor = new Color("#F1E2A7")
+    c.titleColor = new Color("#F4D452")
     c.titleFont = Font.systemFont(14)
     r.onSelect = async () => { await splitFlow(open); await refresh(table); table.reload() }
     table.addRow(r)
@@ -274,7 +274,7 @@ async function manageActivities() {
   }
   const add = new UITableRow()
   add.dismissOnSelect = false
-  add.addText("＋ 加一个").titleColor = new Color("#C0DDA6")
+  add.addText("＋ 加一个").titleColor = new Color("#8ACE5A")
   add.onSelect = async () => {
     const al = new Alert()
     al.title = "新状态"
