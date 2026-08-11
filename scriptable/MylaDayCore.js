@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-0052"
+const VERSION = "20260812-0109"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
@@ -64,6 +64,7 @@ function migrate(d) {
   if (!d.activities || !d.activities.length) d.activities = DEFAULT_ACTIVITIES
   if (!d.days) d.days = {}
   if (!d.todos) d.todos = {}          // { "2026-08-11": [{id, text, done, doneAt}] }
+  if (!d.countdowns) d.countdowns = [] // [{id, name, date:"2026-12-25", yearly, hex}]
   if (!d.ui) d.ui = { span: 7, chart: "bar" }
   d.v = SCHEMA
   return d
@@ -178,6 +179,126 @@ function clock(epochSecs) {
 function activityOf(data, id) {
   return data.activities.find(a => a.id === id) ||
          { id: id, name: id, hex: "#6B6B70" }
+}
+
+// ---------------------------------------------------------------- 倒数日
+
+const CD_PALETTE = ["#F566AD", "#F99243", "#3AD9AA", "#B05AE2", "#40BBE7", "#FAD338"]
+
+/**
+ * 还有几天。按「天」算不按 24 小时算——今天晚上 23:00 到明天早上 8:00 是「明天」，
+ * 不是「还有 9 小时」。
+ * 每年重复的（生日、纪念日）自动滚到下一次。
+ */
+function untilDays(cd, now) {
+  const today = startOfDay(new Date(now || Date.now()))
+  const m = String(cd.date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  let target = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  if (cd.yearly) {
+    target = new Date(today.getFullYear(), Number(m[2]) - 1, Number(m[3]))
+    if (target < today) target = new Date(today.getFullYear() + 1, Number(m[2]) - 1, Number(m[3]))
+  }
+  return {
+    days: Math.round((target.getTime() - today.getTime()) / 86400000),
+    when: target
+  }
+}
+
+/** 排序：先按还剩几天，已经过去的（只有不重复的才会过去）排最后。 */
+function sortedCountdowns(data, now) {
+  const out = []
+  for (const cd of (data.countdowns || [])) {
+    const u = untilDays(cd, now)
+    if (u) out.push({ cd, days: u.days, when: u.when })
+  }
+  out.sort((a, b) => {
+    if ((a.days < 0) !== (b.days < 0)) return a.days < 0 ? 1 : -1
+    return a.days < 0 ? b.days - a.days : a.days - b.days
+  })
+  return out
+}
+
+/**
+ * 倒数日面板。画成一张图而不是用 ListWidget 的堆栈，是为了能在电脑上渲染出来核对——
+ * 堆栈布局只能等装到手机上才知道长什么样。
+ */
+function drawCountdowns(data, w, h, opts) {
+  const o = opts || {}
+  const ctx = new DrawContext()
+  ctx.size = new Size(w, h)
+  ctx.opaque = false
+  ctx.respectScreenScale = true
+
+  const items = sortedCountdowns(data, o.now).slice(0, o.max || 5)
+  const ink = "#F6F1EC"
+
+  if (!items.length) {
+    ctx.setFont(Font.systemFont(13))
+    ctx.setTextColor(new Color(ink, 0.35))
+    ctx.setTextAlignedCenter()
+    ctx.drawTextInRect("还没有记着的日子", new Rect(0, h / 2 - 10, w, 20))
+    return ctx.getImage()
+  }
+
+  const gap = 9
+  const rowH = Math.min(66, (h - gap * (items.length - 1)) / items.length)
+  const WEEK = ["日", "一", "二", "三", "四", "五", "六"]
+
+  items.forEach((it, i) => {
+    const y = i * (rowH + gap)
+    const hex = it.cd.hex || CD_PALETTE[i % CD_PALETTE.length]
+
+    // 左边一道竖色条，比整块底色轻，也比小圆点显眼
+    const bar = new Path()
+    bar.addRoundedRect(new Rect(0, y + rowH * 0.14, 3.5, rowH * 0.72), 1.75, 1.75)
+    ctx.addPath(bar)
+    ctx.setFillColor(new Color(hex))
+    ctx.fillPath()
+
+    const past = it.days < 0
+    const n = Math.abs(it.days)
+    const big = it.days === 0 ? "今天" : String(n)
+
+    // 大数字靠右，先量宽度给名字留位置
+    // 已经过去的：数字小一号、暗一点，视觉上退到还没到的后面
+    ctx.setTextAlignedRight()
+    ctx.setFont(Font.boldSystemFont(rowH * (it.days === 0 ? 0.36 : past ? 0.37 : 0.46)))
+    ctx.setTextColor(new Color(it.days === 0 ? hex : ink, past ? 0.5 : it.days === 0 ? 1 : 0.95))
+    const numW = it.days === 0 ? rowH * 1.3
+      : Math.max(rowH * 0.62, String(n).length * rowH * (past ? 0.23 : 0.28))
+    ctx.drawTextInRect(big, new Rect(w - numW - (it.days === 0 ? 0 : rowH * 0.42),
+                                     y + rowH * 0.10, numW, rowH * 0.56))
+    if (it.days !== 0) {
+      ctx.setFont(Font.systemFont(rowH * 0.19))
+      ctx.setTextColor(new Color(ink, 0.4))
+      ctx.drawTextInRect("天", new Rect(w - rowH * 0.40, y + rowH * 0.40, rowH * 0.36, rowH * 0.26))
+    }
+
+    const textW = w - 11 - numW - rowH * 0.5
+    ctx.setTextAlignedLeft()
+    ctx.setFont(Font.semiboldSystemFont(rowH * 0.24))
+    ctx.setTextColor(new Color(ink, 0.95))
+    ctx.drawTextInRect(it.cd.name, new Rect(11, y + rowH * 0.13, textW, rowH * 0.32))
+
+    const d = it.when
+    ctx.setFont(Font.systemFont(rowH * 0.185))
+    ctx.setTextColor(new Color(ink, 0.38))
+    // 过去的日子不写星期——「已经过去」四个字加上星期太长，会顶到数字上
+    ctx.drawTextInRect(
+      past
+        ? "已过 · " + (d.getMonth() + 1) + "月" + d.getDate() + "日"
+        : (d.getMonth() + 1) + "月" + d.getDate() + "日 周" + WEEK[d.getDay()]
+            + (it.cd.yearly ? " · 每年" : ""),
+      new Rect(11, y + rowH * 0.52, textW, rowH * 0.3))
+
+    if (i < items.length - 1) {
+      ctx.setFillColor(new Color(ink, 0.08))
+      ctx.fillRect(new Rect(11, y + rowH + gap / 2 - 0.5, w - 11, 1))
+    }
+  })
+
+  return ctx.getImage()
 }
 
 // ---------------------------------------------------------------- 绘制
@@ -547,5 +668,6 @@ function shadeHex(hex) {
 module.exports = {
   VERSION, DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
   switchTo, splitSegment, duration, totals, hhmm, clock, activityOf,
-  drawDial, drawDonut, drawClawd, DEFAULT_ACTIVITIES, DATA
+  drawDial, drawDonut, drawClawd, drawCountdowns, untilDays, sortedCountdowns,
+  CD_PALETTE, DEFAULT_ACTIVITIES, DATA
 }

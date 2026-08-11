@@ -142,6 +142,20 @@ function apply(m) {
       break
 
     case "nudge": data.nudgeMinutes = m.v; break
+
+    case "cd.add":
+      // 颜色用页面挑好的那个，别在这儿再算一遍——算法一旦分叉两边就对不上
+      data.countdowns.push({ id: m.v2, name: m.v.name, date: m.v.date, yearly: !!m.v.yearly,
+        hex: m.v.hex || C.CD_PALETTE[data.countdowns.length % C.CD_PALETTE.length] })
+      break
+    case "cd.save": {
+      const cd = data.countdowns.find(x => x.id === m.v2)
+      if (cd) { cd.name = m.v.name; cd.date = m.v.date; cd.yearly = !!m.v.yearly }
+      break
+    }
+    case "cd.del":
+      data.countdowns = data.countdowns.filter(x => x.id !== m.v)
+      break
   }
 }
 
@@ -195,6 +209,10 @@ function payload() {
         : null,
     activities: data.activities.map(a => ({ id: a.id, name: a.name, hex: a.hex })),
     palette: C.DEFAULT_ACTIVITIES.map(a => a.hex),
+    cdPalette: C.CD_PALETTE,
+    countdowns: (data.countdowns || []).map(c => ({
+      id: c.id, name: c.name, date: c.date, yearly: !!c.yearly, hex: c.hex
+    })),
     clawd: clawdSet(),
     segs: segs.map(s => ({ id: s.id, a: s.a, s: s.s, e: s.e })),
     dayStart: Math.floor(C.startOfDay().getTime() / 1000),

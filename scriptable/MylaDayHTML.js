@@ -703,6 +703,123 @@ function alertSaved(msg) {
   draw()
 }
 
+// ---------------------------------------------------------------- 倒数日
+// 按「天」算不按 24 小时算：今晚 23:00 到明早 8:00 是「明天」，不是「还有 9 小时」。
+// 每年重复的自动滚到下一次。这段跟脚本里的 untilDays 是同一套算法。
+function cdDays(cd) {
+  var m = String(cd.date || "").match(/^(\\d{4})-(\\d{2})-(\\d{2})$/)
+  if (!m) return null
+  var today = new Date(); today.setHours(0, 0, 0, 0)
+  var target = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  if (cd.yearly) {
+    target = new Date(today.getFullYear(), Number(m[2]) - 1, Number(m[3]))
+    if (target < today) target = new Date(today.getFullYear() + 1, Number(m[2]) - 1, Number(m[3]))
+  }
+  return { days: Math.round((target - today) / 86400000), when: target }
+}
+function cdSorted() {
+  var out = []
+  for (var i = 0; i < P.countdowns.length; i++) {
+    var u = cdDays(P.countdowns[i])
+    if (u) out.push({ cd: P.countdowns[i], days: u.days, when: u.when })
+  }
+  out.sort(function (a, b) {
+    if ((a.days < 0) !== (b.days < 0)) return a.days < 0 ? 1 : -1
+    return a.days < 0 ? b.days - a.days : a.days - b.days
+  })
+  return out
+}
+function cdList() {
+  var list = cdSorted()
+  var h = '<h3>倒数日</h3><div class="tip">记着的日子会显示在大号小组件右边。</div><div class="card">'
+  if (!list.length) h += '<div class="empty">还没有记着的日子</div>'
+  var W = ["日", "一", "二", "三", "四", "五", "六"]
+  for (var i = 0; i < list.length; i++) {
+    var x = list[i], d = x.when, past = x.days < 0
+    h += '<div class="row" onclick="cdEdit(\\'' + x.cd.id + '\\')">'
+      + '<i class="d" style="background:' + x.cd.hex + '"></i>'
+      + '<span class="n">' + esc(x.cd.name) + '<br>'
+      + '<span style="font-size:12.5px;color:var(--faint)">'
+      + (past ? "已过 · " : "") + (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + W[d.getDay()]
+      + (x.cd.yearly ? " · 每年" : "") + '</span></span>'
+      + '<span class="v" style="font-size:19px;font-weight:700;color:'
+      + (past ? "var(--faint)" : "var(--ink)") + '">'
+      + (x.days === 0 ? "今天" : Math.abs(x.days) + " 天") + '</span>'
+      + '<span class="chev">›</span></div>'
+  }
+  h += '<div class="link" style="color:var(--green)" onclick="cdEdit(null)">'
+    + '<span>＋ 记一个日子</span><span></span></div>'
+  S.sheet = h + '</div>'
+  draw()
+}
+function cdEdit(id) {
+  var cur = null
+  for (var i = 0; i < P.countdowns.length; i++) if (P.countdowns[i].id === id) cur = P.countdowns[i]
+  S.cdID = id
+  S.cdYearly = cur ? !!cur.yearly : false
+  var today = new Date()
+  var iso = cur ? cur.date : today.getFullYear() + "-"
+    + ("0" + (today.getMonth() + 1)).slice(-2) + "-" + ("0" + today.getDate()).slice(-2)
+  var h = '<h3>' + (cur ? "改这个日子" : "记一个日子") + '</h3>'
+    + '<div class="card"><div class="addrow" style="border:0;padding:4px">'
+    + '<input id="cdName" placeholder="叫什么，比如「论文 deadline」" value="' + esc(cur ? cur.name : "") + '"></div>'
+    + '<div class="addrow" style="padding:12px 4px 4px">'
+    + '<input id="cdDate" type="date" value="' + iso + '" style="color:var(--ink)"></div>'
+    + '<div class="link" onclick="toggleYearly()"><span>每年重复</span>'
+    + '<span class="h" id="yearlyMark">' + (S.cdYearly ? "开着 ✓" : "关着") + '</span></div>'
+    + '<div class="tip" style="margin:8px 4px 0">生日、纪念日这种开着，过完自动滚到明年。</div>'
+    + '</div>'
+    + '<div class="card"><div class="link" style="color:var(--green)" onclick="cdSave()">'
+    + '<span>' + (cur ? "改好了" : "记下") + '</span><span></span></div>'
+  if (cur) {
+    h += '<div class="link" style="color:#F2363C" onclick="cdDel(\\'' + id + '\\')">'
+      + '<span>删掉</span><span></span></div>'
+  }
+  S.sheet = h + '</div>'
+  draw()
+  setTimeout(function () { var e = document.getElementById("cdName"); if (e && !cur) e.focus() }, 140)
+}
+function toggleYearly() {
+  S.cdYearly = !S.cdYearly
+  var m = document.getElementById("yearlyMark")
+  if (m) m.textContent = S.cdYearly ? "开着 ✓" : "关着"
+}
+function cdSave() {
+  var name = (document.getElementById("cdName") || {}).value
+  var date = (document.getElementById("cdDate") || {}).value
+  name = (name || "").trim()
+  if (!name || !date) return alertSheet("名字和日期都要填")
+  if (S.cdID) {
+    for (var i = 0; i < P.countdowns.length; i++) if (P.countdowns[i].id === S.cdID) {
+      P.countdowns[i].name = name
+      P.countdowns[i].date = date
+      P.countdowns[i].yearly = S.cdYearly
+    }
+    log("cd.save", { name: name, date: date, yearly: S.cdYearly }, S.cdID)
+  } else {
+    var id = "d" + Date.now()
+    var hex = nextHex()
+    P.countdowns.push({ id: id, name: name, date: date, yearly: S.cdYearly, hex: hex })
+    // 颜色一起记进去，回放时用同一个，不然 app 里和小组件上会对不上
+    log("cd.add", { name: name, date: date, yearly: S.cdYearly, hex: hex }, id)
+  }
+  S.cdID = null
+  cdList()
+}
+/** 挑一个还没被占用的颜色，撞色了两条看起来像一回事。 */
+function nextHex() {
+  var used = P.countdowns.map(function (c) { return c.hex })
+  for (var i = 0; i < P.cdPalette.length; i++) {
+    if (used.indexOf(P.cdPalette[i]) < 0) return P.cdPalette[i]
+  }
+  return P.cdPalette[P.countdowns.length % P.cdPalette.length]
+}
+function cdDel(id) {
+  P.countdowns = P.countdowns.filter(function (x) { return x.id !== id })
+  log("cd.del", id)
+  cdList()
+}
+
 // ---------------------------------------------------------------- 弹层
 function closeSheet() { S.sheet = null; S.pending = null; draw() }
 function tapOut(e) { if (e.target.id === "sheet") closeSheet() }
