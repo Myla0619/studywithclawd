@@ -7,7 +7,10 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
+const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
+const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
+const TMP  = fm.joinPath(fm.documentsDirectory(), "myladay.writing.json")
 
 // ---------------------------------------------------------------- 数据
 
@@ -25,18 +28,60 @@ const DEFAULT_ACTIVITIES = [
 ]
 
 function load() {
-  if (!fm.fileExists(DATA)) return { activities: DEFAULT_ACTIVITIES, days: {} }
+  if (!fm.fileExists(DATA)) {
+    // 主文件没了但备份还在（比如上次写到一半崩了）——用备份恢复
+    if (fm.fileExists(BAK)) {
+      try {
+        const b = JSON.parse(fm.readString(BAK))
+        b.recoveredFromBackup = true
+        return migrate(b)
+      } catch (e) { /* 备份也坏了，下面走空档 */ }
+    }
+    return { v: SCHEMA, activities: DEFAULT_ACTIVITIES, days: {} }
+  }
   try {
-    const d = JSON.parse(fm.readString(DATA))
-    if (!d.activities || !d.activities.length) d.activities = DEFAULT_ACTIVITIES
-    if (!d.days) d.days = {}
-    return d
+    return migrate(JSON.parse(fm.readString(DATA)))
   } catch (e) {
-    return { activities: DEFAULT_ACTIVITIES, days: {} }
+    // 绝不静默丢弃：把坏文件留档，再试备份
+    const stamp = String(Math.floor(Date.now() / 1000))
+    try { fm.move(DATA, fm.joinPath(fm.documentsDirectory(), "myladay.corrupt-" + stamp + ".json")) }
+    catch (e2) { /* 移不动就算了，至少不覆写 */ }
+    if (fm.fileExists(BAK)) {
+      try {
+        const b = JSON.parse(fm.readString(BAK))
+        b.recoveredFromBackup = true
+        return migrate(b)
+      } catch (e3) { /* 都坏了 */ }
+    }
+    return { v: SCHEMA, activities: DEFAULT_ACTIVITIES, days: {}, loadFailed: true }
   }
 }
 
-function save(d) { fm.writeString(DATA, JSON.stringify(d)) }
+/** 老版本的数据结构在这里补齐，别让升级把字段搞丢。 */
+function migrate(d) {
+  if (!d || typeof d !== "object") d = {}
+  if (!d.activities || !d.activities.length) d.activities = DEFAULT_ACTIVITIES
+  if (!d.days) d.days = {}
+  d.v = SCHEMA
+  return d
+}
+
+/**
+ * 先写临时文件、读回来核对、把现有的存成备份，最后才替换正式文件。
+ * 中途任何一步崩掉，正式文件都还是上一份完整的。
+ */
+function save(d) {
+  const text = JSON.stringify(d)
+  fm.writeString(TMP, text)
+  if (fm.readString(TMP).length !== text.length) return false   // 没写全就别动正式文件
+  if (fm.fileExists(DATA)) {
+    if (fm.fileExists(BAK)) fm.remove(BAK)
+    fm.copy(DATA, BAK)
+  }
+  if (fm.fileExists(DATA)) fm.remove(DATA)
+  fm.move(TMP, DATA)
+  return true
+}
 
 function dayKey(date) {
   const d = date || new Date()
@@ -448,7 +493,7 @@ function shadeHex(hex) {
 }
 
 module.exports = {
-  load, save, dayKey, startOfDay, segments, openSegment, rollover,
+  DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
   switchTo, splitSegment, duration, totals, hhmm, clock, activityOf,
   drawDial, drawClawd, DEFAULT_ACTIVITIES, DATA
 }

@@ -65,6 +65,19 @@ async function refresh(table) {
   dial.addImage(C.drawDial(data, segs, 300, { now })).centerAligned()
   table.addRow(dial)
 
+  // 数据出过问题必须让你知道，默默恢复等于骗你
+  if (data.loadFailed) {
+    const r = new UITableRow()
+    const c = r.addText("⚠️ 数据文件读不出来，已从零开始。坏掉的那份留在 myladay.corrupt-*.json")
+    c.titleColor = new Color("#F2363C"); c.titleFont = Font.systemFont(13)
+    table.addRow(r)
+  } else if (data.recoveredFromBackup) {
+    const r = new UITableRow()
+    const c = r.addText("⚠️ 主文件损坏，已用备份恢复，可能少了最后一次改动")
+    c.titleColor = new Color("#F99243"); c.titleFont = Font.systemFont(13)
+    table.addRow(r)
+  }
+
   const acc = Object.values(t).reduce((a, b) => a + b, 0)
   addNote(table, `今天已记录 ${C.hhmm(acc)}`)
   if (data.lastAuto && now - data.lastAuto.at < 3600000) {
@@ -131,6 +144,11 @@ async function refresh(table) {
   addAction(table, "管理状态", async () => { await manageActivities(); await refresh(table); table.reload() })
   addAction(table, `提醒：每 ${nudgeMinutes()} 分钟问一次`, async () => {
     await setNudge(); await refresh(table); table.reload()
+  })
+  addAction(table, "导出一份备份", async () => {
+    // 存到「文件」里，换手机或者我改坏了都能拿回来
+    try { await DocumentPicker.exportFile(C.DATA) }
+    catch (e) { await toast("导出取消了") }
   })
 }
 

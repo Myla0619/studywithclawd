@@ -40,7 +40,11 @@ for (const name of FILES) {
   if (!saved) failed++
 }
 
+// 只覆盖上面列的那几个脚本名，数据文件（myladay*.json）一律不碰
 const listed = fm.listContents(dir).filter(f => f.endsWith(".js"))
+const dataDir = FileManager.local().documentsDirectory()
+const dataFiles = FileManager.local().listContents(dataDir)
+  .filter(f => f.indexOf("myladay") === 0)
 
 const a = new Alert()
 a.title = failed ? `有 ${failed} 个没装上` : "装好了"
@@ -48,6 +52,8 @@ a.message = log.join("\n")
   + "\n\n装到了：" + (inICloud ? "iCloud" : "本机") + "脚本目录"
   + "\n" + dir
   + "\n\n这个目录里现在有：\n" + (listed.length ? listed.join("、") : "（空）")
+  + "\n\n你的记录（没有被动过）：\n"
+  + (dataFiles.length ? dataFiles.join("、") : "（还没有记录）")
   + (failed ? "" : "\n\n退回脚本列表下拉刷新，就能看到 MylaDay。")
 a.addAction("好")
 await a.present()
