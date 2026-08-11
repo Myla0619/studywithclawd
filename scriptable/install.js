@@ -13,7 +13,7 @@
 
 const REPO = "Myla0619/studywithclawd"
 const FILES = ["MylaDayCore.js", "MylaDayHTML.js", "MylaDay.js",
-               "MylaDayWidget.js", "Diag.js", "Check.js"]
+               "MylaDayWidget.js", "Diag.js", "Check.js", "WebTest.js"]
 
 const here = module.filename
 const dir = here.slice(0, here.lastIndexOf("/"))

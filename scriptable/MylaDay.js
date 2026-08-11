@@ -154,12 +154,14 @@ function png(img) { return "data:image/png;base64," + Data.fromPNG(img).toBase64
 /** Clawd 按状态各画一张，页面按当前状态换图。脚本这边画，绘制代码还是只有一份。 */
 function clawdSet() {
   const out = {}
-  const box = 240
+  // 不开 respectScreenScale：开了真机上是 3 倍尺寸，11 张塞进同一个 HTML 字符串
+  // 能到几百 KB，loadHTML 直接不出东西。200px 显示在 108pt 的位置上够清楚了。
+  const box = 200
   const draw = act => {
     const ctx = new DrawContext()
     ctx.size = new Size(box, box)
     ctx.opaque = false
-    ctx.respectScreenScale = true
+    ctx.respectScreenScale = false
     C.drawClawd(ctx, box / 2, box * 0.86, box * 0.0155, act)
     return png(ctx.getImage())
   }
