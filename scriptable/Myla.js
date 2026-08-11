@@ -79,9 +79,13 @@ if (incoming) {
   // 更新放在开界面之前，因为「关窗口之后」那个位置对上划退出 app 的人根本不会跑，
   // 于是永远更不到新版。这里最多六小时查一次，静默下载不打断你，下次打开生效。
   await selfUpdate(false)
-  // 网页那边可能留着没落盘的操作（上一次在网页里点了东西然后被杀），先捞回来
+  // 上次可能留着没落盘的操作（点了东西然后被杀），先捞回来
   await drainPending()
-  await showTable()
+  // 默认是网页那套好看的界面。简易模式是 UITable：点一下脚本当场存盘，
+  // 中间不经过网页，是验证过最稳的一条。万一网页那边又出问题，
+  // 在「别的」里一键切过来，不用等我发版。
+  if (data.simpleMode) await showTable()
+  else await runApp()
 }
 Script.complete()
 
@@ -184,6 +188,12 @@ function drawTable(t) {
 
   head(t, "别的")
   action(t, "看圆盘 / 统计 / 倒数日", null, async () => {
+    await runApp()
+    drawTable(t); t.reload()
+  })
+  action(t, "换回好看的界面", null, async () => {
+    data.simpleMode = false
+    persist("切界面")
     await runApp()
     drawTable(t); t.reload()
   })
@@ -496,6 +506,7 @@ function apply(m) {
       break
 
     case "nudge": data.nudgeMinutes = m.v; break
+    case "simple": data.simpleMode = !!m.v; break
     case "autoGrace": data.autoGrace = m.v; break
 
     case "seg.retag": {
@@ -632,6 +643,7 @@ function payload() {
     carry: (data.todos[C.dayKey(new Date(now - 86400000))] || []).filter(x => !x.done).length,
     nudge: data.nudgeMinutes === 0 ? 0 : (data.nudgeMinutes || 90),
     autoGrace: data.autoGrace === undefined ? 30 : data.autoGrace,
+    simpleMode: !!data.simpleMode,
     lastAuto: (data.lastAuto && Date.now() - data.lastAuto.at < 6 * 3600000) ? data.lastAuto : null,
     span: data.ui.span || 7,
     chart: data.ui.chart || "bar"

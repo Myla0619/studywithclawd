@@ -718,7 +718,8 @@ function viewMore() {
                                     : P.autoGrace === 0 ? "随便覆盖" : "保护 " + P.autoGrace + " 分钟"],
     ["nudge()",      "定时问一句",   P.nudge === 0 ? "关着" : P.nudge + " 分钟"],
     ["wantExport()", "导出一份备份", "存到「文件」"],
-    ["wantUpdate()", "检查更新",     P.pending ? "已下好 " + P.pending + "，下次打开生效" : "自动查"]
+    ["wantUpdate()", "检查更新",     P.pending ? "已下好 " + P.pending + "，下次打开生效" : "自动查"],
+    ["simpleMode()", "简易模式",     P.simpleMode ? "开着" : "关着"]
   ]
   var h = '<div class="card">'
   for (var i = 0; i < rows.length; i++) {
@@ -817,6 +818,20 @@ function wantExport() {
     + '所以得等这个窗口关掉。往下滑关掉就行。</div>'
   draw()
 }
+function simpleMode() {
+  S.sheet = '<h3>简易模式</h3>'
+    + '<div class="tip">切成朴素的列表界面：点一下脚本当场写盘，中间不经过网页。'
+    + '难看，但这条路最稳。<br><br>这个漂亮界面靠的是网页把操作送回脚本，'
+    + '万一哪天又存不住，开这个先保住记录。</div>'
+    + '<div class="card">'
+    + '<div class="link" style="color:var(--green)" onclick="setSimple(true)">'
+    + '<span>切成简易模式</span><span class="h">下次打开生效 ›</span></div>'
+    + (P.simpleMode ? '<div class="link" onclick="setSimple(false)">'
+        + '<span>用回这个界面</span><span></span></div>' : '')
+    + '</div>'
+  draw()
+}
+function setSimple(v) { P.simpleMode = v; log("simple", v); S.sheet = null; draw() }
 function wantUpdate() {
   log("update")
   S.sheet = P.pending

@@ -269,10 +269,21 @@ async function tapRow(table, text) {
 }
 
 disk = {}; store = {}
-await runMyla("② 主界面点「学习」（当场存盘那条路）", {
+await runMyla("② 默认（网页界面）点三下再关掉", { actions: actionsIn() })
+let d = C.load()
+console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
+  + " ｜ 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
+if (!(d.days[tk] || []).some(s => s.a === "study")) {
+  console.log("     ❌ 没存下来"); process.exit(1)
+}
+
+// 简易模式：主界面是 UITable，点一行脚本当场存盘，中间不经过网页
+disk = {}; store = {}
+disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
+await runMyla("②b 简易模式点「学习」（当场存盘）", {
   taps: async t => { await tapRow(t, "学习") }
 })
-let d = C.load()
+d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">"))
 if (!(d.days[tk] || []).some(s => s.a === "study")) {
   console.log("     ❌ 点了学习但没存下来"); process.exit(1)
