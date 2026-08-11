@@ -1,4 +1,4 @@
-# ClawdDay（iOS）
+# Myla 的一天（iOS）
 
 一天 24 小时的圆盘，加一个可以常驻主屏的小组件。
 
@@ -7,7 +7,12 @@
 ```
 Shared/Model.swift       状态、时间段、当天日志、读写
 Shared/Dial.swift        24 小时圆盘（app 和小组件共用同一份绘制代码）
-Shared/ClawdPixel.swift  像素 Clawd，跟 macOS 那两只同一个 28 格网格
+Shared/ClawdDrawn.swift  手绘版 Clawd（圆滚滚那只），iOS 上用这个
+Shared/ClawdPixel.swift  像素 Clawd，跟 macOS 那两只同一个网格（备用）
+Shared/Summary.swift     跨天汇总：周/月总计、某个状态的全部时段
+ClawdDay/ActivityDetail.swift  点开某个状态：今天每段几点到几点 + 周月统计 + 手机使用
+ClawdDay/SpanSummary.swift     总圆盘的周/月总览
+ClawdDayReport/          屏幕使用时间的报告扩展（数据只能在这里面渲染）
 ClawdDay/                主 app
 ClawdDayWidget/          主屏小组件（小号=纯圆盘，中号=圆盘+图例）
 project.yml              XcodeGen 工程描述
@@ -26,6 +31,22 @@ open ClawdDay.xcodeproj
 然后在 Xcode 里选 Signing & Capabilities，把 Team 设成你的 Apple ID，接上手机直接跑。
 
 不想用 XcodeGen 也行：Xcode 新建一个 iOS App 工程，再 File → New → Target → Widget Extension，然后把上面这些 `.swift` 文件拖进去（`Shared/` 里的三个要同时勾选两个 target）。
+
+## 屏幕使用时间：能做到什么，做不到什么
+
+**做不到**：算出「有效学习时长 = 学习 3 小时 − 手机 20 分钟」。Apple 的设计是用量数据只能在它自己的
+报告扩展里渲染，[取不进 app 的代码](https://medium.com/@nikkieke001/what-no-one-tells-you-about-building-with-apples-screen-time-api-e061d14d1f66)——
+试图取出来会得到空值。所以这个减法圆盘上永远算不了。
+
+**能做到**：点开某个状态，每一段下面嵌一块系统渲染的区域，显示那段时间手机用了多久、拿起几次、
+哪几个 app。你看得见，但那些数字进不了圆盘也进不了统计。
+
+要用这块需要 **Family Controls 权限**（Xcode 里加 capability，上架还要向 Apple 单独申请），
+并且用户要授权。另外 iOS 26 这套 API [有已知的回归 bug](https://developer.apple.com/forums/thread/819997)，
+阈值不触发、数据错乱都有人报过。
+
+真想要"有效时长"这个数字，最靠谱的反而是手动：去刷手机就切到「刷手机」状态，圆盘上直接是一段红色，
+学习那段自然就不含它了。零权限、零依赖。
 
 ## 两个要注意的坑
 

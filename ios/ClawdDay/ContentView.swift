@@ -9,6 +9,8 @@ struct ContentView: View {
     @State private var activities = Store.activities()
     @State private var now = Date()
     @State private var editing = false
+    @State private var detail: Activity? = nil
+    @State private var showSummary = false
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -42,15 +44,26 @@ struct ContentView: View {
                 }
                 .padding(.bottom, 40)
             }
-            .navigationTitle("Clawd 的一天")
+            .navigationTitle("Myla 的一天")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showSummary = true } label: {
+                        Image(systemName: "calendar")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
                 }
             }
             .sheet(isPresented: $editing) {
                 ActivityEditor(activities: $activities) { reload() }
+            }
+            .sheet(item: $detail) { a in
+                ActivityDetail(activity: a, now: now)
+            }
+            .sheet(isPresented: $showSummary) {
+                SpanSummary(activities: activities, now: now)
             }
         }
         .onReceive(tick) { now = $0 }
@@ -106,12 +119,18 @@ struct ContentView: View {
                 .padding(.horizontal, 20)
 
             ForEach(totals, id: \.0.id) { a, secs in
-                HStack {
-                    Circle().fill(a.color).frame(width: 10, height: 10)
-                    Text(a.name)
-                    Spacer()
-                    Text(hhmm(secs)).foregroundStyle(.secondary).monospacedDigit()
+                Button { detail = a } label: {
+                    HStack {
+                        Circle().fill(a.color).frame(width: 10, height: 10)
+                        Text(a.name)
+                        Spacer()
+                        Text(hhmm(secs)).foregroundStyle(.secondary).monospacedDigit()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 5)
             }
