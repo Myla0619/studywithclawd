@@ -82,17 +82,16 @@ if (incoming) {
   await selfUpdate(false)
   // 上次可能留着没落盘的操作（点了东西然后被杀），先捞回来
   await drainPending()
-  // 默认是网页那套好看的界面。
+  // 一个思路，不再两套：凡是会改数据的，全部走脚本这边的 UITable——
+  // onSelect 就是脚本代码，点一下当场 C.save，中间不经过网页。
   //
-  // 一度以为「网页到脚本」这条路整个不通，把所有编辑都搬回了 UITable。
-  // 后来用户指出关键事实：圆盘好看那版**切状态是存得住的**，只有待办和倒数日不行。
-  // 差别是后两者带中文——非 ASCII 走 base64 之后脚本那边解不回来，JSON.parse
-  // 失败整批丢，而且一旦日志里混进一条中文，之后每一批都带着它，批批失败。
-  // 载荷改成纯 ASCII 之后这条路是通的。
+  // 为什么不留网页那条：切状态、待办、倒数日在网页里各丢过一轮，我逐个修
+  // （baseURL 拦跳转、JSON 二次编码、非 ASCII 解不回来）每次都能找到真 bug，
+  // 但用户始终在丢数据。两套并存的代价是「有的能存有的不能存」，
+  // 排查成本全压在用户身上。统一到验证过的那一套。
   //
-  // 简易模式（UITable，点一下当场存盘）留着当保险，在「别的」里开。
-  if (data.simpleMode) await showTable()
-  else await runApp()
+  // 网页留着当查看器：圆盘、统计、单项详情。viewOnly 打开，里面点不了任何东西。
+  await showTable()
 }
 Script.complete()
 
@@ -125,6 +124,9 @@ function drawTable(t) {
   t.addRow(dial)
 
   if (saveFailed) note(t, "⚠️ " + saveFailed, "#F2363C")
+  if (data.pendingUpdate && data.pendingUpdate > C.VERSION) {
+    note(t, "已下好 " + data.pendingUpdate + "，关掉重开就生效", "#40BBE7")
+  }
   const acc = Object.keys(tot).reduce((a, k) => a + tot[k], 0)
   note(t, "今天已记录 " + C.hhmm(acc))
 
@@ -231,7 +233,7 @@ function drawTable(t) {
   action(t, "导出一份备份", null, async () => {
     try { await DocumentPicker.exportFile(C.DATA) } catch (e) {}
   })
-  note(t, "版本 " + C.VERSION + (data.pendingUpdate ? " · 已下好 " + data.pendingUpdate : ""))
+  note(t, "版本 " + C.VERSION)
 }
 
 function dateLine(it) {
@@ -509,14 +511,16 @@ async function runApp() {
  */
 async function selfUpdate(force) {
   const now = Date.now()
-  if (!force && data.lastCheck && now - data.lastCheck < 6 * 3600000) return
+  // 每次打开都查。原来六小时一次，结果用户在几十分钟里反复测试却一直拿不到新版，
+  // 我发的每一版对他都不存在。一个小请求而已，别为了省它把更新变成玄学。
+  if (!force && data.lastCheck && now - data.lastCheck < 60000) return
   data.lastCheck = now
 
   let sha = null
   try {
     const r = new Request("https://api.github.com/repos/" + REPO + "/commits/main")
     r.headers = { "User-Agent": "MylaDay" }      // 不带 UA 直接 403
-    r.timeoutInterval = force ? 15 : 6      // 静默查的时候别让开 app 等太久
+    r.timeoutInterval = force ? 15 : 5      // 静默查的时候别让开 app 等太久
     sha = (await r.loadJSON()).sha
   } catch (e) {
     C.save(data)
@@ -779,7 +783,7 @@ function payload() {
   return {
     version: C.VERSION,
     sid: SID,
-    viewOnly: !!data.simpleMode,   // 简易模式下网页只负责看，改数据在 UITable 那边
+    viewOnly: true,   // 网页只负责看。改数据一律在 UITable 那边，只有一条路。
     pending: (data.pendingUpdate && data.pendingUpdate > C.VERSION) ? data.pendingUpdate : null,
     sub: `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`,
     warn: data.loadFailed

@@ -274,45 +274,29 @@ async function tapRow(table, text) {
   throw new Error("界面上找不到「" + text + "」这一行")
 }
 
-// ---- 默认（网页界面）。重点是带中文的操作能不能存住：
-// 待办内容和倒数日名字都是中文，而状态 id 是 study 这种纯字母。
-// 之前正是中文那些存不住，而且一旦日志里混进一条中文，之后每一批都带着它、批批失败。
+// ---- 会改数据的全部走 UITable，点一下脚本当场存盘
 disk = {}; store = {}
-await runMyla("② 网页里切状态 + 加中文待办 + 记中文倒数日", {
-  actions: page => {
-    page.log("switch", "study")
-    page.log("todo.add", "把第三章的实验重跑一遍", "n1")
-    page.doc.getElementById("cdName").value = "论文 deadline · 中文测试"
-    page.doc.getElementById("cdDate").value = "2026-08-30"
-    page.cdSave()
-    page.log("switch", "research")
-  },
-  noEval: true, noStorage: true        // 只留实时拦截那一条，最严苛
-})
+await runMyla("② 点「学习」", { taps: async t => { await tapRow(t, "学习") } })
 let d = C.load()
-const segs = (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
-const todo = (d.todos[tk] || []).map(x => x.text).join("、")
-const cd = (d.countdowns || []).map(c => c.name).join("、")
-console.log("     → 段：" + segs + " ｜ 待办：" + (todo || "空") + " ｜ 倒数日：" + (cd || "空"))
-if (segs !== "学习>科研") { console.log("     ❌ 切状态没存全"); process.exit(1) }
-if (todo !== "把第三章的实验重跑一遍") { console.log("     ❌ 中文待办丢了或乱码"); process.exit(1) }
-if (cd !== "论文 deadline · 中文测试") { console.log("     ❌ 中文倒数日丢了或乱码"); process.exit(1) }
-console.log("     ✓ 中文原样存住了（只靠实时拦截那一条）")
-
-// ---- 简易模式：UITable，点一下脚本当场存盘
-disk = {}; store = {}
-disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
-await runMyla("③ 简易模式点「学习」", { taps: async t => { await tapRow(t, "学习") } })
-d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">"))
 if (!(d.days[tk] || []).some(s => s.a === "study")) { console.log("     ❌ 没存下来"); process.exit(1) }
 
-disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
-ALERT_INPUT = ["论文 deadline", "2026-08-30"]; ALERT_PICK = 0
-await runMyla("④ 简易模式记一个倒数日", { taps: async t => { await tapRow(t, "记一个日子") } })
+ALERT_INPUT = ["写周报"]; ALERT_PICK = 0
+await runMyla("③ 加一条中文待办", { taps: async t => { await tapRow(t, "加一条") } })
+d = C.load()
+console.log("     → 待办：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
+if ((d.todos[tk] || [])[0] && (d.todos[tk] || [])[0].text !== "写周报") {
+  console.log("     ❌ 中文乱了"); process.exit(1)
+}
+
+ALERT_INPUT = ["论文 deadline · 中文", "2026-08-30"]; ALERT_PICK = 0
+await runMyla("④ 记一个中文倒数日", { taps: async t => { await tapRow(t, "记一个日子") } })
 d = C.load()
 console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name).join("、") || "空"))
-if (!(d.countdowns || []).length) { console.log("     ❌ 没存下来"); process.exit(1) }
+if ((d.countdowns || [])[0] === undefined
+    || d.countdowns[0].name !== "论文 deadline · 中文") {
+  console.log("     ❌ 没存下来或中文乱了"); process.exit(1)
+}
 ALERT_INPUT = []; ALERT_PICK = 0
 
 // ---- 上划杀进程：浏览器里的暂存下次启动捞回来
