@@ -51,6 +51,45 @@ const FM = {
 }
 
 // 页面：真的把 MylaView 的 <script> 跑起来，这样测的是真实的页面逻辑
+function makePageReal(wv) {
+  const view = readModule("MylaView.js")
+  const html = view.HTML
+  const js = html.slice(html.indexOf("<script>") + 8, html.lastIndexOf("</script>"))
+
+  const els = {}
+  const mkEl = () => ({ value: "", textContent: "", innerHTML: "", className: "",
+                        focus() {}, select() {}, insertAdjacentHTML() {} })
+  const document = {
+    getElementById: id => (els[id] || (els[id] = mkEl())),
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+    visibilityState: "visible"
+  }
+  const location = {}
+  let href = ""
+  Object.defineProperty(location, "href", {
+    get: () => href,
+    set: v => {                       // 页面发起跳转 —— 正是真机上的第 ① 条通道
+      href = v
+      if (wv && wv.shouldAllowRequest) wv.shouldAllowRequest({ url: v })
+    }
+  })
+  const store = wv.__store
+  const window = {
+    addEventListener: () => {},
+    localStorage: {
+      getItem: k => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = v },
+      removeItem: k => { delete store[k] }
+    }
+  }
+  const fn = new Function("window", "document", "location", "localStorage", "setTimeout", "Math",
+    js + "\nreturn { boot: window.boot, log: log, LOG: LOG, els: arguments[1] }")
+  const api = fn(window, document, location, window.localStorage, f => f(), Math)
+  api.els = els
+  return api
+}
+
 function makePage() {
   const view = readModule("MylaView.js")
   const html = view.HTML
@@ -79,35 +118,32 @@ function makePage() {
 
 let page = null
 class WebView {
-  constructor() { this.html = "" }
+  constructor() { this.html = ""; this.__store = store }
   async loadHTML(html, base) {
     this.html = html
     this.base = base
     if (html.indexOf("window.boot(") >= 0) {
-      page = makePage()
+      // 真的把页面代码跑起来，并真的 boot(payload, true)
+      page = makePageReal(this)
       const call = html.slice(html.lastIndexOf("<script>") + 8, html.lastIndexOf("</script>"))
-      // 真的执行 boot(payload, true)
       const payloadJSON = call.slice(call.indexOf("(") + 1, call.lastIndexOf(", true)"))
-      const payload = JSON.parse(payloadJSON)
-      this.payload = payload
-      pageState = { LOG: [], SEQ: 0, sid: payload.sid }
+      this.payload = JSON.parse(payloadJSON)
+      page.boot(this.payload, true)
     }
   }
   async evaluateJavaScript(js) {
     if (js.indexOf("localStorage.getItem") >= 0) return store["myla_pending"] || null
     if (js.indexOf("localStorage.removeItem") >= 0) { delete store["myla_pending"]; return null }
-    if (js.indexOf("window.LOG") >= 0) return JSON.stringify(pageState ? pageState.LOG : [])
+    if (js.indexOf("window.LOG") >= 0) return JSON.stringify(page ? page.LOG : [])
     return null
   }
   async present() {
-    // 用户在窗口里点了几下，然后关掉
-    if (SCENARIO.actions) SCENARIO.actions()
+    if (SCENARIO.actions) SCENARIO.actions(page)     // 在窗口里点几下
     return "closed"
   }
   set shouldAllowRequest(fn) { this._sar = fn }
   get shouldAllowRequest() { return this._sar }
 }
-let pageState = null
 
 class Alert {
   constructor() { this.actions = [] }
@@ -165,14 +201,13 @@ async function runMyla(label, scenario) {
   console.log("  ✓ " + label + " 跑通了")
 }
 
-// 场景：开着窗口点三下（模拟 shouldAllowRequest 通道 + localStorage）
-function actionsIn(wvGetter) {
-  return () => {
-    const acts = [["switch", "study"], ["todo.add", "重跑实验", "n1"], ["switch", "research"]]
-    for (const [t, v, v2] of acts) {
-      pageState.LOG.push({ i: pageState.SEQ++, sid: pageState.sid, t, v, v2, at: Date.now() })
-    }
-    store["myla_pending"] = JSON.stringify(pageState.LOG)
+// 场景：在窗口里点三下。走的是页面里真实的 log()，所以会真的触发
+// location.href 跳转（第 ① 条通道）和 localStorage 写入（第 ③ 条）。
+function actionsIn() {
+  return page => {
+    page.log("switch", "study")
+    page.log("todo.add", "重跑实验", "n1")
+    page.log("switch", "research")
   }
 }
 
@@ -195,13 +230,12 @@ disk = {}; store = {}
 const before = JSON.stringify(disk)
 SCENARIO = { actions: actionsIn() }
 ;(function killApp() {
-  // 手动模拟：页面写了 localStorage，但脚本一行落盘代码都没跑
-  pageState = { LOG: [], SEQ: 0, sid: "killed-session" }
-  const acts = [["switch", "study"], ["todo.add", "被杀之前加的", "n9"]]
-  for (const [t, v, v2] of acts) {
-    pageState.LOG.push({ i: pageState.SEQ++, sid: "killed-session", t, v, v2, at: Date.now() })
-  }
-  store["myla_pending"] = JSON.stringify(pageState.LOG)
+  // 页面写了 localStorage，但脚本那边一行落盘代码都没跑（进程被杀）
+  const LOG = [
+    { i: 0, sid: "killed-session", t: "switch", v: "study", at: Date.now() },
+    { i: 1, sid: "killed-session", t: "todo.add", v: "被杀之前加的", v2: "n9", at: Date.now() }
+  ]
+  store["myla_pending"] = JSON.stringify(LOG)
 })()
 await runMyla("③ 上划杀进程后再打开", {})
 d = C.load()

@@ -44,6 +44,20 @@ if (data.lastAuto) {
   say("最近一次带参数启动", "没有记录 —— 说明没有东西在带参数启动这个脚本")
 }
 
+// ---- 存盘留下的指纹：只要有任何一条通道成功执行过操作，这里就有记录
+const applied = data.applied || {}
+const sids = Object.keys(applied)
+if (!sids.length) {
+  say("⚠️ 从来没有一次操作被存下来",
+      "说明页面里点的东西一条都没到脚本这边。问题在通道，不在显示。")
+} else {
+  say("存下来过的运行次数", sids.length + " 次")
+  for (const sid of sids.slice(-4)) {
+    say("  " + sid, "那次存到第 " + applied[sid] + " 条操作")
+  }
+}
+if (data.pendingUpdate) say("下好了还没生效的版本", data.pendingUpdate)
+
 // ---- 最近三天的每一段
 for (let back = 0; back < 3; back++) {
   const d = new Date(Date.now() - back * 86400000)
