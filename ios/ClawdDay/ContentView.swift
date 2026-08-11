@@ -1,0 +1,180 @@
+// One screen: the dial on top, the activity you are in right now, a grid to
+// switch to something else, and today's breakdown underneath.
+
+import SwiftUI
+import WidgetKit
+
+struct ContentView: View {
+    @State private var log = Store.load()
+    @State private var activities = Store.activities()
+    @State private var now = Date()
+    @State private var editing = false
+
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var totals: [(Activity, TimeInterval)] {
+        let t = log.totals(now: now)
+        return activities
+            .compactMap { a in t[a.id].map { (a, $0) } }
+            .filter { $0.1 >= 30 }
+            .sorted { $0.1 > $1.1 }
+    }
+
+    private var accounted: TimeInterval {
+        log.totals(now: now).values.reduce(0, +)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 22) {
+                    DialFace(log: log, activities: activities, now: now)
+                        .padding(.horizontal, 28)
+                        .padding(.top, 8)
+
+                    Text("今天已记录 \(hhmm(accounted))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    switcher
+
+                    if !totals.isEmpty { breakdown }
+                }
+                .padding(.bottom, 40)
+            }
+            .navigationTitle("Clawd 的一天")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+                }
+            }
+            .sheet(isPresented: $editing) {
+                ActivityEditor(activities: $activities) { reload() }
+            }
+        }
+        .onReceive(tick) { now = $0 }
+        .onAppear {
+            Store.rolloverIfNeeded()
+            reload()
+        }
+    }
+
+    // MARK: Pieces
+
+    private var switcher: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("现在在做")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 20)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
+                ForEach(activities) { a in
+                    let on = log.openSegment?.activityID == a.id
+                    Button {
+                        // Switching is the only write: it closes the old segment
+                        // and opens the new one at this instant.
+                        Store.switchTo(a.id)
+                        reload()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Circle().fill(a.color).frame(width: 12, height: 12)
+                            Text(a.name).font(.callout.weight(on ? .semibold : .regular))
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 11)
+                        .padding(.horizontal, 12)
+                        .background(on ? a.color.opacity(0.28) : Color.primary.opacity(0.06),
+                                    in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(on ? a.color : .clear, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private var breakdown: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("今天都花在哪了")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 20)
+
+            ForEach(totals, id: \.0.id) { a, secs in
+                HStack {
+                    Circle().fill(a.color).frame(width: 10, height: 10)
+                    Text(a.name)
+                    Spacer()
+                    Text(hhmm(secs)).foregroundStyle(.secondary).monospacedDigit()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 5)
+            }
+        }
+    }
+
+    private func reload() {
+        log = Store.load()
+        activities = Store.activities()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+}
+
+// MARK: - Editing the activity list
+
+struct ActivityEditor: View {
+    @Binding var activities: [Activity]
+    var onDone: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var newName = ""
+
+    private let palette = ["3B4A6B", "7A5EA8", "D06749", "3F8F8A", "D4A03C",
+                           "5E7A94", "5D9856", "C98BA0", "B85450", "6B6B70"]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("状态") {
+                    ForEach($activities) { $a in
+                        HStack {
+                            Circle().fill(a.color).frame(width: 14, height: 14)
+                            TextField("名字", text: $a.name)
+                        }
+                    }
+                    .onDelete { activities.remove(atOffsets: $0) }
+                    .onMove { activities.move(fromOffsets: $0, toOffset: $1) }
+                }
+                Section("加一个") {
+                    HStack {
+                        TextField("比如「实习」", text: $newName)
+                        Button("加上") {
+                            let n = newName.trimmingCharacters(in: .whitespaces)
+                            guard !n.isEmpty else { return }
+                            activities.append(Activity(id: UUID().uuidString, name: n,
+                                                       hex: palette[activities.count % palette.count]))
+                            newName = ""
+                        }
+                        .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
+            .navigationTitle("状态列表")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") {
+                        Store.saveActivities(activities)
+                        onDone()
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}

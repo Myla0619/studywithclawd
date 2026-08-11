@@ -17,3 +17,9 @@ clawd/clawd
 pet/claude-pet
 *.dSYM/
 .DS_Store
+
+# Xcode
+ios/*.xcodeproj/
+ios/*.xcworkspace/
+ios/build/
+xcuserdata/
