@@ -453,6 +453,13 @@ async function runApp() {
   wv.shouldAllowRequest = req => {
     const u = (req && req.url) || ""
     if (u.indexOf("myladay://") !== 0) return true
+    // 先记「到货」再解析：到没到和解析成不成功是两回事，混在一起就没法定位。
+    // MylaWhy 会显示这个计数——它是 0 就是根本没送到，大于 0 就看后面的错误字段。
+    const ch = data.chan || (data.chan = {})
+    ch.arrivals = (ch.arrivals || 0) + 1
+    ch.lastLen = u.length
+    ch.lastAt = Date.now()
+    try { C.save(data) } catch (e2) {}
     try {
       // 收到的是「到目前为止的全部操作」，按序号只取没执行过的那些。
       // 所以中途丢几条消息不要紧，后一条会把前面的一起带过来。

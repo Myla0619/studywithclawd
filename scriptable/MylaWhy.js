@@ -57,6 +57,10 @@ if (!sids.length) {
   }
 }
 if (data.pendingUpdate) say("下好了还没生效的版本", data.pendingUpdate)
+const ch = data.chan || {}
+say("通道到货次数", ch.arrivals
+  ? ch.arrivals + " 次 · 最近一条 " + (ch.lastLen || "?") + " 字符 · " + new Date(ch.lastAt).toLocaleString()
+  : "0 次 —— 页面发的东西一条都没送到脚本")
 if (data.lastChannelError) say("⚠️ 通道最近报的错", data.lastChannelError)
 if (data.lastApplyError) say("⚠️ 最近有一条操作没执行成", data.lastApplyError)
 
