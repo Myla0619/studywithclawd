@@ -26,6 +26,10 @@ const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周�
  *  必须声明在入口代码之前——const 在自己那行执行之前碰不得，而入口那段就会调用 runApp。 */
 const SID = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
+// 跟随系统深浅色。和 SID 一样必须声明在入口之前——入口那段就会画界面。
+const INK = a => Color.dynamic(new Color("#2A2622", a === undefined ? 1 : a),
+                               new Color("#F6F1EC", a === undefined ? 1 : a))
+
 // save() 写完会读回来核对，对不上就返回 false。我一直没看这个返回值——
 // 万一它是静默失败的，那前面那些通道全是无辜的，而我会一直往错的地方修。
 // 声明位置必须在入口之前：入口那段就会调用 runApp。
@@ -72,12 +76,145 @@ if (incoming) {
     await a.present()
   }
 } else {
-  // 更新放在开窗口之前，因为「关窗口之后」那个位置对上划退出 app 的人根本不会跑，
+  // 更新放在开界面之前，因为「关窗口之后」那个位置对上划退出 app 的人根本不会跑，
   // 于是永远更不到新版。这里最多六小时查一次，静默下载不打断你，下次打开生效。
   await selfUpdate(false)
-  await runApp()
+  // 网页那边可能留着没落盘的操作（上一次在网页里点了东西然后被杀），先捞回来
+  await drainPending()
+  await showTable()
 }
 Script.complete()
+
+// ---------------------------------------------------------------- 主界面（UITable）
+//
+// 切状态和清单打勾走这里，不走网页。
+// 理由很直接：UITable 的 onSelect 是脚本代码，点一下当场 C.save，这条路
+// 是验证过能用的；而网页到脚本那层通道在真机上一直不可靠，用户的记录丢过好几次。
+// 圆盘、统计、倒数日这些「看」的东西仍然在网页里，点「看圆盘和统计」进去。
+//
+// 长相上确实不如网页那版，这是拿好看换存得住。等网页那条通道确认稳了可以换回去。
+
+async function showTable() {
+  const t = new UITable()
+  t.showSeparators = false
+  drawTable(t)
+  await t.present(true)
+}
+
+function drawTable(t) {
+  t.removeAllRows()
+  const now = Date.now()
+  const segs = C.segments(data)
+  const open = C.openSegment(segs)
+  const tot = C.totals(segs, now)
+
+  const dial = new UITableRow()
+  dial.height = 320
+  dial.addImage(C.drawDial(data, segs, 290, { now })).centerAligned()
+  t.addRow(dial)
+
+  if (saveFailed) note(t, "⚠️ " + saveFailed, "#F2363C")
+  const acc = Object.keys(tot).reduce((a, k) => a + tot[k], 0)
+  note(t, "今天已记录 " + C.hhmm(acc))
+
+  head(t, "现在在做")
+  for (const a of data.activities) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    r.height = 48
+    const on = open && open.a === a.id
+    const dot = r.addText(on ? "●" : "○")
+    dot.titleColor = new Color(a.hex); dot.titleFont = Font.systemFont(18); dot.widthWeight = 12
+    const c = r.addText(a.name)
+    c.titleColor = INK(); c.titleFont = on ? Font.boldSystemFont(18) : Font.systemFont(18)
+    c.widthWeight = 58
+    const d = r.addText(tot[a.id] ? C.hhmm(tot[a.id]) : "")
+    d.rightAligned(); d.widthWeight = 30
+    d.titleColor = INK(0.45); d.titleFont = Font.systemFont(13)
+    r.onSelect = () => {
+      // 当场存盘。这就是昨天那套。
+      data = C.switchTo(data, a.id, Date.now(), "me")
+      persist("切状态")
+      scheduleNudge()
+      drawTable(t); t.reload()
+    }
+    t.addRow(r)
+  }
+
+  const key = C.dayKey()
+  const list = data.todos[key] || (data.todos[key] = [])
+  const left = list.filter(x => !x.done).length
+  head(t, left ? "今天要做的 · 还剩 " + left + " 条" : "今天要做的")
+  const sorted = list.slice().sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0))
+  for (const it of sorted) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    r.height = 46
+    const box = r.addText(it.done ? "☑︎" : "☐")
+    box.titleColor = it.done ? INK(0.3) : new Color("#7DD73C")
+    box.titleFont = Font.systemFont(19); box.widthWeight = 12
+    const c = r.addText(it.text)
+    c.titleColor = it.done ? INK(0.32) : INK()
+    c.titleFont = Font.systemFont(17); c.widthWeight = 73
+    if (it.done && it.doneAt) {
+      const d = r.addText(C.clock(Math.floor(it.doneAt / 1000)))
+      d.rightAligned(); d.widthWeight = 15
+      d.titleColor = INK(0.3); d.titleFont = Font.systemFont(12)
+    }
+    r.onSelect = () => {
+      it.done = !it.done
+      it.doneAt = it.done ? Date.now() : null
+      persist("清单打勾")
+      drawTable(t); t.reload()
+    }
+    t.addRow(r)
+  }
+  action(t, "＋ 加一条", "#7DD73C", async () => {
+    const al = new Alert()
+    al.title = "加一条"
+    al.addTextField("要做什么", "")
+    al.addAction("加上"); al.addCancelAction("取消")
+    if (await al.present() < 0) return
+    const v = al.textFieldValue(0).trim()
+    if (!v) return
+    list.push({ id: uid(), text: v, done: false })
+    persist("加清单")
+    drawTable(t); t.reload()
+  })
+
+  head(t, "别的")
+  action(t, "看圆盘 / 统计 / 倒数日", null, async () => {
+    await runApp()
+    drawTable(t); t.reload()
+  })
+  note(t, "版本 " + C.VERSION + (data.pendingUpdate ? " · 已下好 " + data.pendingUpdate : ""))
+}
+
+function head(t, text) {
+  const r = new UITableRow()
+  r.isHeader = true
+  const c = r.addText(text)
+  c.titleColor = INK(0.55); c.titleFont = Font.semiboldSystemFont(13)
+  t.addRow(r)
+}
+function note(t, text, hex) {
+  const r = new UITableRow()
+  r.dismissOnSelect = false
+  const c = r.addText(text)
+  c.titleColor = hex ? new Color(hex) : INK(0.4)
+  c.titleFont = Font.systemFont(12.5); c.centerAligned()
+  t.addRow(r)
+}
+function action(t, text, hex, fn) {
+  const r = new UITableRow()
+  r.dismissOnSelect = false
+  r.height = 48
+  const c = r.addText(text)
+  c.titleFont = Font.systemFont(17)
+  if (hex) c.titleColor = new Color(hex)
+  r.onSelect = fn
+  t.addRow(r)
+}
 
 // ---------------------------------------------------------------- 开窗口
 
@@ -95,12 +232,6 @@ function markDone(sid, i) {
 }
 
 async function runApp() {
-  // 开窗口之前先把上次残留的操作捞回来。
-  // 这条是为「上划把 app 杀掉」准备的：那种退出方式下，页面到脚本的实时通道
-  // 全都来不及跑，但浏览器自己的存储还在。用一个空页面去读，因为同一个 app
-  // 里的 WebView 共用一份存储。
-  await drainPending()
-
   const wv = new WebView()
   const json = JSON.stringify(payload())
     .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")

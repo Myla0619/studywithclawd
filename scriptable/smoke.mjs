@@ -162,6 +162,29 @@ class WebView {
   get shouldAllowRequest() { return this._sar }
 }
 
+// UITable：主界面现在走这条，onSelect 是脚本代码、点一下当场存盘。
+// present() 里模拟用户点了哪几行。
+class UITableCell {
+  constructor(text) { this.text = text }
+  rightAligned() { return this } leftAligned() { return this } centerAligned() { return this }
+}
+class UITableRow {
+  constructor() { this.cells = [] }
+  addText(t) { const c = new UITableCell(t); this.cells.push(c); return c }
+  addImage() { const c = new UITableCell("[图]"); this.cells.push(c); return c }
+  get text() { return this.cells.map(c => c.text).join(" ") }
+}
+class UITable {
+  constructor() { this.rows = [] }
+  addRow(r) { this.rows.push(r) }
+  removeAllRows() { this.rows = [] }
+  reload() {}
+  async present() {
+    if (SCENARIO.taps) await SCENARIO.taps(this)
+    return null
+  }
+}
+
 class Alert {
   constructor() { this.actions = [] }
   addAction(t) { this.actions.push(t) }
@@ -202,7 +225,8 @@ function readModule(name) {
 
 const GLOBALS = {
   Size, Rect, Point, Color, Font, Path, DrawContext, Data, FileManager, WebView,
-  Alert, Notification, Timer, Request, DocumentPicker, Script, config, args: {}
+  UITable, UITableRow, Alert, Notification, Timer, Request, DocumentPicker, Script,
+  config, args: {}
 }
 
 let SCENARIO = {}
@@ -236,11 +260,24 @@ await runMyla("① 第一次用（没有任何数据）", {})
 const C = readModule("MylaCore.js")
 const tk = C.dayKey()
 
+// 点某一行
+async function tapRow(table, text) {
+  for (const r of table.rows) {
+    if (r.text.indexOf(text) >= 0 && r.onSelect) { await r.onSelect(); return true }
+  }
+  throw new Error("界面上找不到「" + text + "」这一行")
+}
+
 disk = {}; store = {}
-await runMyla("② 窗口里点三下再关掉", { actions: actionsIn() })
+await runMyla("② 主界面点「学习」（当场存盘那条路）", {
+  taps: async t => { await tapRow(t, "学习") }
+})
 let d = C.load()
-console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
-  + " ｜ 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
+console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">"))
+if (!(d.days[tk] || []).some(s => s.a === "study")) {
+  console.log("     ❌ 点了学习但没存下来"); process.exit(1)
+}
+console.log("     ✓ 点一下就存住了（不经过网页）")
 
 // ③ 上划杀进程：只有 localStorage 留下来，下次启动应该捞回来
 disk = {}; store = {}
@@ -254,7 +291,7 @@ SCENARIO = { actions: actionsIn() }
   ]
   store["myla_pending"] = JSON.stringify(LOG)
 })()
-await runMyla("③ 上划杀进程后再打开", {})
+await runMyla("③ 上划杀进程后再打开（网页里的残留捞回来）", {})
 d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
   + " ｜ 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
@@ -269,7 +306,10 @@ console.log("     → 清单：" + ((d.todos[tk] || []).map(x => x.text).join("�
 // ⑤ 最关键的一种：只有实时拦截那条通道能用（第②④条不工作、localStorage 也没有）。
 // 用户的情况就是这样——他上划退出，关窗口后的通道根本跑不到。
 disk = {}; store = {}
-await runMyla("⑤ 只有实时拦截那条通道", { actions: actionsIn(), noEval: true, noStorage: true })
+await runMyla("⑤ 网页里操作、只有实时拦截那条通道能用", {
+  taps: async t => { await tapRow(t, "看圆盘") },
+  actions: actionsIn(), noEval: true, noStorage: true
+})
 d = C.load()
 const only = (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
 const onlyTodo = (d.todos[tk] || []).map(x => x.text).join("、") || "空"
