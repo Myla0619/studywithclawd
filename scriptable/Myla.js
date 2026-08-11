@@ -245,10 +245,15 @@ async function runApp() {
   const wv = new WebView()
   const json = JSON.stringify(payload())
     .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")
-  // 不给 baseURL。之前为了让 localStorage 可用加过 https://myla.local/，
-  // 但从 https 源跳到自定义协议会被 WKWebView 拦掉，等于把最要紧的那条通道弄坏了。
-  // 体检脚本的页面没有 baseURL，跳转是通的——通道比 localStorage 重要。
-  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ", true)</" + "script>")
+  // 给一个 https 的 baseURL：没有源的话 localStorage 直接抛异常，而 localStorage
+  // 是唯一扛得住「上划把 app 杀掉」的通道。
+  //
+  // 我一度为了保住 myladay:// 跳转把它去掉了，但用户实测那条跳转一次都没送达，
+  // 等于白牺牲了唯一管用的那条。现在优先保 localStorage：
+  //   上划退出  → 下次启动从 localStorage 捞回来
+  //   正常关窗口 → 关掉后读页面变量（用户实测这条是通的）
+  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ", true)</" + "script>",
+                    "https://myla.local/")
 
   // 存盘一共四条通道，因为其中没有一条我能在电脑上验证。任意一条通一次，
   // 所有操作就都在——页面每次发的是「到目前为止的全部操作」，不是单条，
@@ -324,13 +329,17 @@ async function runApp() {
 
   // 第三条：关窗口后再读一遍。按 i 去重，几条通道同时生效也不会重复执行。
   let log = []
+  let readOk = false
   try {
     const raw = await wv.evaluateJavaScript("JSON.stringify(window.LOG || [])")
     log = JSON.parse(raw || "[]")
-  } catch (e) { /* 读不到就算了，前面几条多半已经存过 */ }
+    readOk = true
+  } catch (e) { /* 读不到就算了，浏览器里那份暂存还在，下次启动捞 */ }
 
   take(log)
-  await clearPending()
+  // 只有确认读到了页面记录才清暂存。读失败还清的话，等于把唯一的备份亲手删掉——
+  // 这条是冒烟测试抓出来的，「只有 localStorage 活着」的场景当场就丢数据。
+  if (readOk) await clearPending()
   scheduleNudge()
 
   if (saveFailed) {
@@ -572,7 +581,7 @@ function decodePayload(raw) {
 async function drainPending() {
   try {
     const probe = new WebView()
-    await probe.loadHTML("<html></html>")
+    await probe.loadHTML("<html></html>", "https://myla.local/")
     const raw = await probe.evaluateJavaScript("localStorage.getItem('myla_pending')")
     if (!raw) return
     const batch = JSON.parse(raw)

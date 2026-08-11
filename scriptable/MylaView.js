@@ -190,6 +190,8 @@ var SEQ = 0
 // （不然浏览器会真的去导航）。不能再靠协议判断——页面现在带 https 的 baseURL，
 // 那是为了让 localStorage 可用。
 var URLCHAN = false
+var STORE_OK = false          // localStorage 写成功过没有
+var STORE_ERR = ""            // 写不进去的话是什么错
 
 var SPANS = [["周", 7], ["月", 30], ["3个月", 90]]
 var CHARTS = [["柱状", "bar"], ["圆盘", "dial"]]
@@ -212,7 +214,10 @@ function flush() {
   if (!LOG.length) return
   // 第五条通道，也是唯一扛得住「上划把 app 杀掉」的：写进浏览器自己的存储，
   // 下次启动时脚本在开窗口之前把它捞出来。不需要任何页面到脚本的实时通道。
-  try { localStorage.setItem("myla_pending", JSON.stringify(LOG.slice(-400))) } catch (e) {}
+  try {
+    localStorage.setItem("myla_pending", JSON.stringify(LOG.slice(-400)))
+    STORE_OK = true
+  } catch (e) { STORE_ERR = (e && e.message) || String(e) }
   if (!URLCHAN) return
   try {
     var recent = LOG.slice(-200)            // URL 不能无限长，留最近 200 条
@@ -283,6 +288,11 @@ function draw() {
   var sh = document.getElementById("sheet")
   if (S.sheet) { document.getElementById("sheetBody").innerHTML = S.sheet; sh.className = "sheet open" }
   else sh.className = "sheet"
+
+  // 每次重绘都把完整记录重发一遍。原来只在操作那一刻发一次，那一次丢了就永远丢，
+  // 而「切状态存得住、倒数日存不住」正是单次发送偶尔丢的样子。
+  // 发的是全量、脚本按序号去重，所以重发没有任何副作用。
+  flush()
 }
 
 // ---------------------------------------------------------------- 24 小时圆环
@@ -719,7 +729,9 @@ function viewMore() {
     ["nudge()",      "定时问一句",   P.nudge === 0 ? "关着" : P.nudge + " 分钟"],
     ["wantExport()", "导出一份备份", "存到「文件」"],
     ["wantUpdate()", "检查更新",     P.pending ? "已下好 " + P.pending + "，下次打开生效" : "自动查"],
-    ["simpleMode()", "简易模式",     P.simpleMode ? "开着" : "关着"]
+    ["simpleMode()", "简易模式",     P.simpleMode ? "开着" : "关着"],
+    ["explainLog()", "这次改了几条", LOG.length + " 条"
+      + (LOG.length ? (STORE_OK ? " · 已暂存" : " · ⚠️ 暂存不了") : "")]
   ]
   var h = '<div class="card">'
   for (var i = 0; i < rows.length; i++) {
@@ -816,6 +828,20 @@ function wantExport() {
   S.sheet = '<h3>关掉窗口就会弹出保存框</h3>'
     + '<div class="tip">导出要用系统的「文件」选择器，它盖不到这个窗口上面，'
     + '所以得等这个窗口关掉。往下滑关掉就行。</div>'
+  draw()
+}
+function explainLog() {
+  var lines = LOG.slice(-12).map(function (m) {
+    return '<div class="link"><span>' + esc(m.t) + '</span><span class="h">'
+      + esc(typeof m.v === "object" ? (m.v && m.v.name) || "…" : String(m.v === undefined ? "" : m.v))
+      + '</span></div>'
+  }).join("")
+  S.sheet = '<h3>这次开着 app 改了 ' + LOG.length + ' 条</h3>'
+    + '<div class="tip">这里是页面记下的操作。数字对得上你做的事，说明页面这边没问题；'
+    + '要是数字是 0，那就是那一步根本没记下来。<br><br>'
+    + '每次界面重绘都会把这些重发给脚本一遍，所以在这个 app 里多点两下就是多试几次。</div>'
+    + (LOG.length ? '<div class="card">' + lines + '</div>'
+                  : '<div class="empty">还没有任何操作</div>')
   draw()
 }
 function simpleMode() {

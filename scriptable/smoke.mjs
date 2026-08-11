@@ -81,6 +81,7 @@ function makePageReal(wv) {
     get: () => href,
     set: v => {                       // 页面发起跳转 —— 正是真机上的第 ① 条通道
       href = v
+      if (SCENARIO.noSar) return      // 模拟这条通道在真机上一次都送不到
       if (wv && wv.shouldAllowRequest) wv.shouldAllowRequest({ url: v })
     }
   })
@@ -350,6 +351,24 @@ if (!(d.countdowns || []).length) {
   process.exit(1)
 }
 console.log("     ✓ 存住了")
+
+// ⑦ 用户的真实情况：myladay:// 跳转一次都送不到、关窗口后也读不了，
+// 只有 localStorage 活着。上划退出之后下次打开必须能捞回来。
+disk = {}; store = {}
+await runMyla("⑦ 只有 localStorage 活着（记倒数日后上划退出）", {
+  actions: page => {
+    page.doc.getElementById("cdName").value = "论文 deadline"
+    page.doc.getElementById("cdDate").value = "2026-08-30"
+    page.cdSave()
+  },
+  noSar: true, noEval: true
+})
+console.log("     → 被杀之前文件里：" + ((C.load().countdowns || []).length) + " 个倒数日")
+await runMyla("   再打开一次（应该捞回来）", { noSar: true, noEval: true })
+d = C.load()
+console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name).join("、") || "空"))
+if (!(d.countdowns || []).length) { console.log("     ❌ 没捞回来"); process.exit(1) }
+console.log("     ✓ 捞回来了")
 
 console.log("\n弹过的窗：" + (alerts.filter(Boolean).join(" / ") || "（没有）"))
 console.log("\n全部跑通 ✅")
