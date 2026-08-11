@@ -77,6 +77,21 @@ if (orphans.length) { console.log("  ✗ 没人调：" + orphans.join("、")); p
 console.log("  ✓ 都有人调")
 ' || fail=1
 
+echo "── manifest.json 和实际文件对得上吗"
+node -e '
+const fs = require("fs")
+const listed = JSON.parse(fs.readFileSync("manifest.json","utf8")).files
+const runtime = fs.readdirSync(".").filter(f => /^Myla.*\.js$/.test(f) && f !== "MylaGet.js")
+const missing = runtime.filter(f => !listed.includes(f))
+const extra = listed.filter(f => !runtime.includes(f))
+if (missing.length || extra.length) {
+  if (missing.length) console.log("  ✗ 清单里漏了：" + missing.join("、"))
+  if (extra.length) console.log("  ✗ 清单里多了：" + extra.join("、"))
+  process.exit(1)
+}
+console.log("  ✓ " + listed.length + " 个文件，对得上")
+' || fail=1
+
 echo "── 端到端：把整个 Myla.js 真跑一遍"
 # 之前只抽单个函数出来测，所以「const SID 声明在入口之后」这种错一次都没拦住——
 # 语法全对、函数单测也全对，但整个文件一跑就 TDZ 报错。

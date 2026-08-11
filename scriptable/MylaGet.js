@@ -6,7 +6,8 @@
 // 或者文件写到了 A 目录而脚本列表读的是 B 目录。这三样这里都会报出来。
 
 const REPO = "Myla0619/studywithclawd"
-const FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js", "MylaWhy.js"]
+// 下哪些文件由仓库里的 manifest.json 说了算，这样我加了新文件你也不用重粘
+const FALLBACK = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js", "MylaWhy.js"]
 
 const here = module.filename
 const dir = here.slice(0, here.lastIndexOf("/"))
@@ -59,6 +60,14 @@ for (const row of probe) {
 }
 
 // ---- 下载
+let FILES = FALLBACK
+if (good) {
+  try {
+    const m = JSON.parse(await get(good.base + "manifest.json"))
+    if (m && m.files && m.files.length) FILES = m.files
+  } catch (e) {}
+}
+
 const log = []
 let bad = 0
 if (!good) {

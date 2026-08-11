@@ -1,0 +1,10 @@
+{
+  "files": [
+    "MylaCore.js",
+    "MylaView.js",
+    "Myla.js",
+    "MylaWidget.js",
+    "MylaWhy.js",
+    "MylaTest.js"
+  ]
+}

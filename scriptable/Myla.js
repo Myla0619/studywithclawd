@@ -37,8 +37,9 @@ function persist(where) {
 }
 
 const REPO = "Myla0619/studywithclawd"
-const UPDATE_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js",
-                      "MylaWhy.js", "MylaTest.js"]
+// 要下哪些文件由仓库里的 manifest.json 说了算——引导脚本和这里各维护一份列表的话，
+// 加了新文件只改一边，另一边就永远装不上（MylaTest 就是这么漏的）。
+const FALLBACK_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js", "MylaWhy.js"]
 
 // ---------------------------------------------------------------- 入口
 
@@ -241,9 +242,17 @@ async function selfUpdate(force) {
   const fm = inICloud ? FileManager.iCloud() : FileManager.local()
   const base = "https://raw.githubusercontent.com/" + REPO + "/" + sha + "/scriptable/"
 
+  let files = FALLBACK_FILES
+  try {
+    const mf = new Request(base + "manifest.json")
+    mf.timeoutInterval = 12
+    const m = await mf.loadJSON()
+    if (m && m.files && m.files.length) files = m.files
+  } catch (e) { /* 拿不到清单就用退路那份 */ }
+
   let ok = 0
   const failed = []
-  for (const name of UPDATE_FILES) {
+  for (const name of files) {
     try {
       const req = new Request(base + name)
       req.timeoutInterval = 20
