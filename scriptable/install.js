@@ -5,7 +5,7 @@
 // 写错地方的话文件确实落盘了，但脚本列表里死活不出现。
 // module.filename 是当前脚本的完整路径，跟着它走一定没错。
 
-const FILES = ["MylaDayCore.js", "MylaDay.js", "MylaDayWidget.js", "Diag.js"]
+const FILES = ["MylaDayCore.js", "MylaDay.js", "MylaDayWidget.js", "Diag.js", "Check.js"]
 const SOURCES = [
   ["GitHub", "https://raw.githubusercontent.com/Myla0619/studywithclawd/main/scriptable/"],
   ["jsDelivr 镜像", "https://cdn.jsdelivr.net/gh/Myla0619/studywithclawd@main/scriptable/"]
