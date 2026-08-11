@@ -14,6 +14,9 @@ const C = importModule("MylaDayCore")
 const INK  = a => Color.dynamic(new Color("#2A2622", a === undefined ? 1 : a),
                                 new Color("#F6F1EC", a === undefined ? 1 : a))
 
+const SPANS = [["周", 7], ["月", 30], ["3个月", 90]]
+const CHARTS = [["柱状", "bar"], ["圆盘", "dial"]]
+
 // ---------------------------------------------------------------- 入口
 
 let data = C.rollover(C.load())
@@ -43,7 +46,7 @@ if (incoming) {
 }
 Script.complete()
 
-// ---------------------------------------------------------------- 界面
+// ---------------------------------------------------------------- 今天
 
 async function showMain() {
   const table = new UITable()
@@ -67,18 +70,12 @@ async function refresh(table) {
 
   // 数据出过问题必须让你知道，默默恢复等于骗你
   if (data.loadFailed) {
-    const r = new UITableRow()
-    const c = r.addText("⚠️ 数据文件读不出来，已从零开始。坏掉的那份留在 myladay.corrupt-*.json")
-    c.titleColor = new Color("#F2363C"); c.titleFont = Font.systemFont(13)
-    table.addRow(r)
+    warn(table, "⚠️ 数据文件读不出来，已从零开始。坏掉的那份留在 myladay.corrupt-*.json", "#F2363C")
   } else if (data.recoveredFromBackup) {
-    const r = new UITableRow()
-    const c = r.addText("⚠️ 主文件损坏，已用备份恢复，可能少了最后一次改动")
-    c.titleColor = new Color("#F99243"); c.titleFont = Font.systemFont(13)
-    table.addRow(r)
+    warn(table, "⚠️ 主文件损坏，已用备份恢复，可能少了最后一次改动", "#F99243")
   }
 
-  const acc = Object.values(t).reduce((a, b) => a + b, 0)
+  const acc = Object.keys(t).reduce((sum, k) => sum + t[k], 0)
   addNote(table, `今天已记录 ${C.hhmm(acc)}`)
   if (data.lastAuto && now - data.lastAuto.at < 3600000) {
     addNote(table, `刚才${data.lastAuto.why}，自动切的`)
@@ -123,45 +120,307 @@ async function refresh(table) {
     table.addRow(r)
   }
 
-  addHeader(table, "今天都花在哪了（点开看时段）")
-  const ranked = data.activities
-    .filter(a => (t[a.id] || 0) >= 60)
-    .sort((x, y) => (t[y.id] || 0) - (t[x.id] || 0))
-  if (!ranked.length) addNote(table, "还没有记录")
-  for (const a of ranked) {
-    const r = new UITableRow()
-    r.dismissOnSelect = false
-    const dot = r.addText("●"); dot.titleColor = new Color(a.hex); dot.widthWeight = 10
-    const c = r.addText(a.name); c.titleColor = INK(); c.widthWeight = 50
-    const d = r.addText(C.hhmm(t[a.id])); d.rightAligned(); d.widthWeight = 40
-    d.titleColor = INK(0.5)
-    r.onSelect = async () => { await showActivity(a); await refresh(table); table.reload() }
-    table.addRow(r)
-  }
+  addTodos(table)
 
   addHeader(table, "别的")
-  addAction(table, "本周 / 本月总结", async () => { await showSpan() })
+  addAction(table, "统计", async () => { await showStats(); await refresh(table); table.reload() })
   addAction(table, "管理状态", async () => { await manageActivities(); await refresh(table); table.reload() })
   addAction(table, `提醒：每 ${nudgeMinutes()} 分钟问一次`, async () => {
     await setNudge(); await refresh(table); table.reload()
   })
-  addNote(table, "版本 " + C.VERSION)
   addAction(table, "导出一份备份", async () => {
     // 存到「文件」里，换手机或者我改坏了都能拿回来
     try { await DocumentPicker.exportFile(C.DATA) }
     catch (e) { await toast("导出取消了") }
   })
+  addNote(table, "版本 " + C.VERSION)
 }
 
-// ---------------------------------------------------------------- 单个状态
+// ---------------------------------------------------------------- 清单
+//
+// 打勾就完事，不弹窗不追问。做完的不消失、沉到底下——一天结束时能看见自己
+// 干了什么，比清空列表更顶用。刻意不做「开始这条任务」：清单只是清单，
+// 圆盘记的是你真的在干嘛，两件事不该互相替对方做决定。
 
-async function showActivity(a) {
+function todosOf(key) {
+  const k = key || C.dayKey()
+  return data.todos[k] || (data.todos[k] = [])
+}
+
+function addTodos(table) {
+  const list = todosOf()
+  const left = list.filter(x => !x.done).length
+  addHeader(table, left ? `今天要做的 · 还剩 ${left} 条` : "今天要做的")
+
+  // 做完的沉到底下，顺序不变
+  const sorted = list.slice().sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0))
+  for (const item of sorted) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    const box = r.addText(item.done ? "☑︎" : "☐")
+    box.titleColor = item.done ? INK(0.3) : new Color("#7DD73C")
+    box.titleFont = Font.systemFont(18)
+    box.widthWeight = 10
+    const c = r.addText(item.text)
+    c.titleColor = item.done ? INK(0.32) : INK()
+    c.titleFont = Font.systemFont(16)
+    c.widthWeight = 75
+    if (item.done && item.doneAt) {
+      const d = r.addText(C.clock(Math.floor(item.doneAt / 1000)))
+      d.rightAligned(); d.widthWeight = 15
+      d.titleColor = INK(0.3); d.titleFont = Font.systemFont(12)
+    }
+    r.onSelect = async () => {
+      item.done = !item.done
+      item.doneAt = item.done ? Date.now() : null
+      C.save(data)
+      await refresh(table)
+      table.reload()
+    }
+    table.addRow(r)
+  }
+
+  const add = new UITableRow()
+  add.dismissOnSelect = false
+  const plus = add.addText("＋ 加一条")
+  plus.titleColor = new Color("#7DD73C")
+  plus.titleFont = Font.systemFont(16)
+  add.onSelect = async () => {
+    const al = new Alert()
+    al.title = "加一条"
+    al.addTextField("要做什么", "")
+    al.addAction("加上"); al.addCancelAction("取消")
+    if (await al.present() < 0) return
+    const text = al.textFieldValue(0).trim()
+    if (!text) return
+    todosOf().push({ id: Math.random().toString(36).slice(2, 10), text, done: false })
+    C.save(data)
+    await refresh(table)
+    table.reload()
+  }
+  table.addRow(add)
+
+  // 昨天没做完的：问一句，不自动搬。搬不搬是你说了算。
+  const yk = C.dayKey(new Date(Date.now() - 86400000))
+  const rest = (data.todos[yk] || []).filter(x => !x.done)
+  if (rest.length && !list.length) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    const c = r.addText(`昨天还剩 ${rest.length} 条，搬过来？`)
+    c.titleColor = INK(0.45); c.titleFont = Font.systemFont(14)
+    r.onSelect = async () => {
+      for (const x of rest) {
+        todosOf().push({ id: Math.random().toString(36).slice(2, 10), text: x.text, done: false })
+      }
+      C.save(data)
+      await refresh(table)
+      table.reload()
+    }
+    table.addRow(r)
+  }
+
+  if (list.length) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    const c = r.addText("改 / 删")
+    c.titleColor = INK(0.35); c.titleFont = Font.systemFont(13)
+    r.onSelect = async () => { await editTodos(); await refresh(table); table.reload() }
+    table.addRow(r)
+  }
+}
+
+async function editTodos() {
+  const t = new UITable()
+  t.showSeparators = false
+  addHeader(t, "点一条来改或者删")
+  for (const item of todosOf()) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    r.addText(item.text).titleColor = INK(item.done ? 0.35 : 1)
+    r.onSelect = async () => {
+      const al = new Alert()
+      al.title = "这一条"
+      al.addTextField("内容", item.text)
+      al.addAction("改好了"); al.addDestructiveAction("删掉"); al.addCancelAction("取消")
+      const k = await al.present()
+      if (k === 0) { item.text = al.textFieldValue(0).trim() || item.text; C.save(data) }
+      if (k === 1) {
+        const key = C.dayKey()
+        data.todos[key] = todosOf().filter(x => x.id !== item.id)
+        C.save(data)
+      }
+      await editTodos()
+    }
+    t.addRow(r)
+  }
+  await t.present(true)
+}
+
+// ---------------------------------------------------------------- 页面 A：统计
+
+async function showStats() {
+  const table = new UITable()
+  table.showSeparators = false
+  refreshStats(table)
+  await table.present(true)
+}
+
+function refreshStats(table) {
+  table.removeAllRows()
+  const span = data.ui.span, kind = data.ui.chart
+  const bs = buckets(span)
+  const agg = {}
+  for (const b of bs) for (const k in b.totals) agg[k] = (agg[k] || 0) + b.totals[k]
+  const total = Object.keys(agg).reduce((s, k) => s + agg[k], 0)
+  // 按天数，不按桶数——3个月是周柱，13 个桶不等于 13 天
+  let recordedDays = 0
+  for (let back = 0; back < span; back++) {
+    const k = C.dayKey(new Date(Date.now() - back * 86400000))
+    if ((data.days[k] || []).length) recordedDays++
+  }
+
+  switcher(table, SPANS, span, v => {
+    data.ui.span = v; C.save(data); refreshStats(table); table.reload()
+  })
+  switcher(table, CHARTS, kind, v => {
+    data.ui.chart = v; C.save(data); refreshStats(table); table.reload()
+  })
+
+  const chart = new UITableRow()
+  if (kind === "dial") {
+    chart.height = 320
+    chart.addImage(C.drawDonut(data, agg, 290, { sub: `有记录 ${recordedDays} 天` }))
+      .centerAligned()
+  } else {
+    chart.height = 160
+    chart.addImage(stackChart(bs, 300, 145)).centerAligned()
+  }
+  table.addRow(chart)
+
+  addNote(table, span > 31
+    ? `一根柱子是一周，${span} 天里有记录的 ${recordedDays} 天`
+    : `一根柱子是一天，${span} 天里有记录的 ${recordedDays} 天`)
+
+  addHeader(table, "点开看单项")
+  const ranked = data.activities
+    .filter(a => (agg[a.id] || 0) >= 60)
+    .sort((x, y) => agg[y.id] - agg[x.id])
+  if (!ranked.length) addNote(table, "这段时间还没有记录")
+  for (const a of ranked) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    const dot = r.addText("●"); dot.titleColor = new Color(a.hex); dot.widthWeight = 8
+    const c = r.addText(a.name); c.titleColor = INK(); c.widthWeight = 42
+    const pct = r.addText(total ? Math.round(agg[a.id] / total * 100) + "%" : "")
+    pct.rightAligned(); pct.widthWeight = 18
+    pct.titleColor = INK(0.35); pct.titleFont = Font.systemFont(13)
+    const d = r.addText(C.hhmm(agg[a.id]))
+    d.rightAligned(); d.widthWeight = 32
+    d.titleColor = INK(0.5); d.titleFont = Font.systemFont(13)
+    r.onSelect = async () => { await showActivity(a, span) }
+    table.addRow(r)
+  }
+}
+
+/**
+ * 切换器。UITableRow 的 onSelect 是整行的，分段点击得用 addButton 的 onTap。
+ * 选中的加方括号——万一按钮的 titleColor 不生效，靠符号也分得出来。
+ */
+function switcher(table, options, current, onPick) {
+  const r = new UITableRow()
+  r.dismissOnSelect = false
+  r.height = 46
+  for (const [label, value] of options) {
+    const on = value === current
+    const c = r.addButton(on ? `[ ${label} ]` : label)
+    c.titleColor = on ? INK() : INK(0.35)
+    c.centerAligned()
+    c.dismissOnTap = false
+    c.onTap = () => onPick(value)
+  }
+  table.addRow(r)
+}
+
+/**
+ * 把最近 N 天切成柱子。30 天以内一天一根，再长就一周一根——
+ * 90 根柱子每根两像素，看不出任何东西。
+ */
+function buckets(days) {
+  const perWeek = days > 31
+  const out = []
+  const dayTotals = back => {
+    const d = new Date(Date.now() - back * 86400000)
+    const key = C.dayKey(d)
+    const segs = data.days[key]
+    if (!segs || !segs.length) return null
+    const end = back === 0 ? Date.now() : C.startOfDay(d).getTime() + 86400000
+    return C.totals(segs, end)
+  }
+
+  if (!perWeek) {
+    for (let back = days - 1; back >= 0; back--) {
+      const t = dayTotals(back)
+      out.push({ totals: t || {}, has: !!t, cap: 86400 })
+    }
+    return out
+  }
+  for (let w = Math.ceil(days / 7) - 1; w >= 0; w--) {
+    const totals = {}
+    let has = false
+    for (let i = 0; i < 7; i++) {
+      const back = w * 7 + i
+      if (back >= days) continue
+      const t = dayTotals(back)
+      if (!t) continue
+      has = true
+      for (const k in t) totals[k] = (totals[k] || 0) + t[k]
+    }
+    out.push({ totals, has, cap: 7 * 86400 })
+  }
+  return out
+}
+
+// ---------------------------------------------------------------- 页面 B：单事项
+
+async function showActivity(a, span) {
   const table = new UITable()
   table.showSeparators = false
   const now = Date.now()
+  const days = span || 7
+
+  const bs = buckets(days)
+  const totalSpan = bs.reduce((s, b) => s + (b.totals[a.id] || 0), 0)
+  const withAny = bs.filter(b => (b.totals[a.id] || 0) > 0).length
+  const label = days > 31 ? `近 ${days} 天（按周）` : `近 ${days} 天`
+
+  addHeader(table, `${a.name} · ${label}`)
+  const bars = new UITableRow()
+  bars.height = 120
+  bars.addImage(barChart(bs, a, 300, 110)).centerAligned()
+  table.addRow(bars)
+
+  stat(table, "总计", C.hhmm(totalSpan))
+  stat(table, days > 31 ? "有记录的周平均" : "有记录的天平均",
+       withAny ? C.hhmm(totalSpan / withAny) : "—")
+  stat(table, days > 31 ? "出现过的周" : "出现过的天", `${withAny} / ${bs.length}`)
+
+  // 最长的一次：想知道自己到底能连着做多久
+  let longest = null
+  for (let back = days - 1; back >= 0; back--) {
+    const key = C.dayKey(new Date(Date.now() - back * 86400000))
+    for (const s of (data.days[key] || [])) {
+      if (s.a !== a.id) continue
+      const d = C.duration(s, now)
+      if (!longest || d > longest.d) longest = { d, s, key }
+    }
+  }
+  if (longest) {
+    stat(table, "最长的一次",
+         `${C.hhmm(longest.d)} · ${longest.key.slice(5)} ${C.clock(longest.s.s)}`)
+  }
 
   const today = C.segments(data).filter(s => s.a === a.id)
-  addHeader(table, `${a.name} · 今天`)
+  addHeader(table, "今天的时段（点一段可以拆开）")
   if (!today.length) addNote(table, "今天还没有")
   for (const s of today) {
     const r = new UITableRow()
@@ -173,71 +432,22 @@ async function showActivity(a) {
     const d = r.addText(C.hhmm(C.duration(s, now)))
     d.rightAligned(); d.widthWeight = 40
     d.titleColor = INK(0.5)
-    // 点某一段可以直接拆开它
-    r.onSelect = async () => { await splitFlow(s); await showActivity(a) }
+    r.onSelect = async () => { await splitFlow(s); await showActivity(a, days) }
     table.addRow(r)
   }
 
-  for (const [label, days] of [["近 7 天", 7], ["近 30 天", 30]]) {
-    const slices = spanSlices(days)
-    const total = slices.reduce((sum, s) => sum + (s.totals[a.id] || 0), 0)
-    const withAny = slices.filter(s => (s.totals[a.id] || 0) > 0).length
-    addHeader(table, label)
-    addNote(table, `总计 ${C.hhmm(total)}`)
-    addNote(table, withAny ? `有记录的 ${withAny} 天里平均 ${C.hhmm(total / withAny)}` : "没有记录")
-    const bars = new UITableRow()
-    bars.height = 110
-    bars.addImage(barChart(slices, a, 300, 100)).centerAligned()
-    table.addRow(bars)
-  }
-
   await table.present(true)
 }
 
-// ---------------------------------------------------------------- 周月总结
-
-async function showSpan() {
-  const table = new UITable()
-  table.showSeparators = false
-  for (const [label, days] of [["本周（近 7 天）", 7], ["本月（近 30 天）", 30]]) {
-    const slices = spanSlices(days)
-    const agg = {}
-    for (const s of slices) for (const k in s.totals) agg[k] = (agg[k] || 0) + s.totals[k]
-
-    addHeader(table, label)
-    const chart = new UITableRow()
-    chart.height = 150
-    chart.addImage(stackChart(slices, 300, 140)).centerAligned()
-    table.addRow(chart)
-    addNote(table, `有记录 ${slices.length} 天`)
-
-    const ranked = data.activities
-      .filter(a => (agg[a.id] || 0) >= 60)
-      .sort((x, y) => agg[y.id] - agg[x.id])
-    for (const a of ranked) {
-      const r = new UITableRow()
-      r.dismissOnSelect = false
-      const c = r.addText(a.name); c.titleColor = new Color(a.hex); c.widthWeight = 60
-      const d = r.addText(C.hhmm(agg[a.id])); d.rightAligned(); d.widthWeight = 40
-      d.titleColor = INK(0.5)
-      table.addRow(r)
-    }
-  }
-  await table.present(true)
-}
-
-function spanSlices(days) {
-  const out = []
-  for (let back = days - 1; back >= 0; back--) {
-    const d = new Date(Date.now() - back * 86400000)
-    const key = C.dayKey(d)
-    const segs = data.days[key]
-    if (!segs || !segs.length) continue
-    const end = back === 0 ? Date.now()
-      : C.startOfDay(d).getTime() + 86400000
-    out.push({ key, totals: C.totals(segs, end) })
-  }
-  return out
+function stat(table, label, value) {
+  const r = new UITableRow()
+  r.dismissOnSelect = false
+  const c = r.addText(label)
+  c.titleColor = INK(0.45); c.titleFont = Font.systemFont(14); c.widthWeight = 45
+  const d = r.addText(value)
+  d.rightAligned(); d.widthWeight = 55
+  d.titleColor = INK(); d.titleFont = Font.systemFont(15)
+  table.addRow(r)
 }
 
 // ---------------------------------------------------------------- 拆分
@@ -372,34 +582,41 @@ function scheduleNudge() {
 
 // ---------------------------------------------------------------- 小图表
 
-function barChart(slices, activity, w, h) {
+function barChart(bs, activity, w, h) {
   const ctx = new DrawContext()
   ctx.size = new Size(w, h); ctx.opaque = false; ctx.respectScreenScale = true
-  const n = Math.max(1, slices.length)
-  const gap = n > 10 ? 2 : 5
+  const n = Math.max(1, bs.length)
+  const gap = n > 20 ? 1 : n > 10 ? 2 : 5
   const bw = (w - gap * (n - 1)) / n
-  slices.forEach((s, i) => {
-    const secs = s.totals[activity.id] || 0
-    const frac = Math.min(1, secs / (8 * 3600))
-    const bh = Math.max(2, (h - 4) * frac)
-    ctx.setFillColor(new Color(secs > 0 ? activity.hex : "#F6F1EC", secs > 0 ? 1 : 0.08))
+  // 满格 = 一天 8 小时（按周的桶就是一周 8 小时 × 7）
+  const full = bs.length && bs[0].cap > 86400 ? 8 * 3600 * 7 : 8 * 3600
+  bs.forEach((b, i) => {
+    const secs = b.totals[activity.id] || 0
+    const bh = Math.max(2, (h - 4) * Math.min(1, secs / full))
+    ctx.setFillColor(secs > 0 ? new Color(activity.hex) : new Color("#8A8A90", 0.18))
     ctx.fillRect(new Rect(i * (bw + gap), h - bh, bw, bh))
   })
   return ctx.getImage()
 }
 
-function stackChart(slices, w, h) {
+function stackChart(bs, w, h) {
   const ctx = new DrawContext()
   ctx.size = new Size(w, h); ctx.opaque = false; ctx.respectScreenScale = true
-  const n = Math.max(1, slices.length)
-  const gap = n > 10 ? 2 : 6
+  const n = Math.max(1, bs.length)
+  const gap = n > 20 ? 1 : n > 10 ? 2 : 6
   const bw = (w - gap * (n - 1)) / n
-  slices.forEach((s, i) => {
+  bs.forEach((b, i) => {
+    if (!b.has) {
+      // 没记录的那天留个浅底，不然看起来像那天不存在
+      ctx.setFillColor(new Color("#8A8A90", 0.2))
+      ctx.fillRect(new Rect(i * (bw + gap), h - 3, bw, 3))
+      return
+    }
     let y = h
     for (const a of data.activities) {
-      const secs = s.totals[a.id] || 0
+      const secs = b.totals[a.id] || 0
       if (!secs) continue
-      const bh = (h - 2) * (secs / 86400)
+      const bh = (h - 2) * (secs / b.cap)
       y -= bh
       ctx.setFillColor(new Color(a.hex))
       ctx.fillRect(new Rect(i * (bw + gap), y, bw, bh))
@@ -434,6 +651,15 @@ function addAction(table, text, fn) {
   r.dismissOnSelect = false
   r.addText(text).titleFont = Font.systemFont(16)
   r.onSelect = fn
+  table.addRow(r)
+}
+
+function warn(table, text, hex) {
+  const r = new UITableRow()
+  r.dismissOnSelect = false
+  const c = r.addText(text)
+  c.titleColor = new Color(hex)
+  c.titleFont = Font.systemFont(13)
   table.addRow(r)
 }
 

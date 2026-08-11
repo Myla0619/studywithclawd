@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260811-2030"
+const VERSION = "20260811-2106"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
@@ -63,6 +63,8 @@ function migrate(d) {
   if (!d || typeof d !== "object") d = {}
   if (!d.activities || !d.activities.length) d.activities = DEFAULT_ACTIVITIES
   if (!d.days) d.days = {}
+  if (!d.todos) d.todos = {}          // { "2026-08-11": [{id, text, done, doneAt}] }
+  if (!d.ui) d.ui = { span: 7, chart: "bar" }
   d.v = SCHEMA
   return d
 }
@@ -179,6 +181,55 @@ function activityOf(data, id) {
 }
 
 // ---------------------------------------------------------------- 绘制
+
+/**
+ * 占比圆盘：一段时间里各状态占了多少。
+ * 和 drawDial 的区别是这里没有时间轴，角度就是比例，从 12 点顺时针排下去。
+ */
+function drawDonut(data, agg, size, opts) {
+  const o = opts || {}
+  const ctx = new DrawContext()
+  ctx.size = new Size(size, size)
+  ctx.opaque = false
+  ctx.respectScreenScale = true
+
+  if (o.card !== false) {
+    ctx.setFillColor(new Color("#1B1720"))
+    const card = new Path()
+    card.addRoundedRect(new Rect(0, 0, size, size), 22, 22)
+    ctx.addPath(card)
+    ctx.fillPath()
+  }
+
+  const cx = size / 2, cy = size / 2
+  const rOut = size * 0.42, rIn = size * 0.26
+  const total = Object.keys(agg).reduce((sum, k) => sum + agg[k], 0)
+
+  // 底圈：没有数据的时候也得看得出这里是个圆盘
+  ringSlice(ctx, cx, cy, rIn, rOut, 0, 1, "#FFFFFF", 0.07)
+
+  let t = 0
+  const ranked = data.activities
+    .filter(a => agg[a.id] > 0)
+    .sort((x, y) => agg[y.id] - agg[x.id])
+  for (const a of ranked) {
+    const frac = agg[a.id] / total
+    ringSlice(ctx, cx, cy, rIn, rOut, t, t + frac, a.hex)
+    t += frac
+  }
+
+  ctx.setTextAlignedCenter()
+  ctx.setFont(Font.boldSystemFont(size * 0.11))
+  ctx.setTextColor(new Color("#F6F1EC"))
+  ctx.drawTextInRect(total ? Math.round(total / 3600) + " 小时"  : "没有记录",
+                     new Rect(0, cy - size * 0.09, size, size * 0.16))
+  if (total && o.sub) {
+    ctx.setFont(Font.systemFont(size * 0.055))
+    ctx.setTextColor(new Color("#F6F1EC", 0.45))
+    ctx.drawTextInRect(o.sub, new Rect(0, cy + size * 0.07, size, size * 0.09))
+  }
+  return ctx.getImage()
+}
 
 /** 圆环上一段扇形。角度用「一天的比例」表示，0 = 零点在正上方，顺时针。 */
 function ringSlice(ctx, cx, cy, rIn, rOut, t0, t1, color, alpha) {
@@ -496,5 +547,5 @@ function shadeHex(hex) {
 module.exports = {
   VERSION, DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
   switchTo, splitSegment, duration, totals, hhmm, clock, activityOf,
-  drawDial, drawClawd, DEFAULT_ACTIVITIES, DATA
+  drawDial, drawDonut, drawClawd, DEFAULT_ACTIVITIES, DATA
 }
