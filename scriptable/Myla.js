@@ -104,14 +104,32 @@ Script.complete()
 //
 // 长相上确实不如网页那版，这是拿好看换存得住。等网页那条通道确认稳了可以换回去。
 
+/**
+ * 主界面。
+ *
+ * 关键：**需要弹输入框的操作，必须先把表关掉再弹**。
+ * 在已经全屏展示的 UITable 里 await 一个 Alert，它多半永远不返回，
+ * 后面的存盘代码就根本执行不到——「切状态和打勾能存、加待办和记倒数日存不住」
+ * 就是这么来的：前两个不弹窗，后两个弹窗。
+ *
+ * 所以那类行设成 dismissOnSelect = true，把要做的事记在 pending 里；
+ * 表关掉之后再执行、再把表重新打开。
+ */
 async function showTable() {
-  const t = new UITable()
-  t.showSeparators = false
-  drawTable(t)
-  await t.present(true)
+  let pending = null
+  for (;;) {
+    const t = new UITable()
+    t.showSeparators = false
+    drawTable(t, fn => { pending = fn })
+    await t.present(true)
+    if (!pending) return
+    const fn = pending
+    pending = null
+    await fn()            // 表已经关了，这时候弹 Alert 是安全的
+  }
 }
 
-function drawTable(t) {
+function drawTable(t, defer) {
   t.removeAllRows()
   const now = Date.now()
   const segs = C.segments(data)
@@ -182,17 +200,18 @@ function drawTable(t) {
     }
     t.addRow(r)
   }
-  action(t, "＋ 加一条", "#7DD73C", async () => {
+  deferAction(t, defer, "＋ 加一条", "#7DD73C", async () => {
     const al = new Alert()
     al.title = "加一条"
     al.addTextField("要做什么", "")
     al.addAction("加上"); al.addCancelAction("取消")
     if (await al.present() < 0) return
-    const v = al.textFieldValue(0).trim()
+    const v = (al.textFieldValue(0) || "").trim()
     if (!v) return
-    list.push({ id: uid(), text: v, done: false })
+    const key2 = C.dayKey()
+    const l2 = data.todos[key2] || (data.todos[key2] = [])
+    l2.push({ id: uid(), text: v, done: false })
     persist("加清单")
-    drawTable(t); t.reload()
   })
 
   head(t, "倒数日")
@@ -213,24 +232,19 @@ function drawTable(t) {
     d.rightAligned(); d.widthWeight = 28
     d.titleColor = INK(it.days < 0 ? 0.3 : 0.75)
     d.titleFont = Font.boldSystemFont(16)
-    r.onSelect = async () => { await editCountdown(it.cd); drawTable(t); t.reload() }
+    r.dismissOnSelect = true
+    const cdRef = it.cd
+    r.onSelect = () => defer(() => editCountdown(cdRef))
     t.addRow(r)
   }
-  action(t, "＋ 记一个日子", "#7DD73C", async () => {
-    await editCountdown(null); drawTable(t); t.reload()
-  })
+  deferAction(t, defer, "＋ 记一个日子", "#7DD73C", () => editCountdown(null))
 
   head(t, "别的")
-  action(t, "看圆盘 / 统计", null, async () => {
-    await runApp()
-    drawTable(t); t.reload()
-  })
-  action(t, "管理状态", null, async () => { await manageActs(); drawTable(t); t.reload() })
-  action(t, "定时问一句 · " + (data.nudgeMinutes === 0 ? "关着"
-    : (data.nudgeMinutes || 90) + " 分钟"), null, async () => {
-    await setNudge(); drawTable(t); t.reload()
-  })
-  action(t, "导出一份备份", null, async () => {
+  deferAction(t, defer, "看圆盘 / 统计", null, () => runApp())
+  deferAction(t, defer, "管理状态", null, () => manageActs())
+  deferAction(t, defer, "定时问一句 · " + (data.nudgeMinutes === 0 ? "关着"
+    : (data.nudgeMinutes || 90) + " 分钟"), null, () => setNudge())
+  deferAction(t, defer, "导出一份备份", null, async () => {
     try { await DocumentPicker.exportFile(C.DATA) } catch (e) {}
   })
   note(t, "版本 " + C.VERSION)
@@ -281,50 +295,60 @@ async function editCountdown(cd) {
 }
 
 /** 管理状态：改名、删、加。 */
+/** 管理状态。同样：每个动作都要弹窗，所以点了先关表，关了再弹。 */
 async function manageActs() {
-  const t = new UITable()
-  const redraw = () => {
+  let pending = null
+  for (;;) {
+    const t = new UITable()
     t.removeAllRows()
     head(t, "点一个改名或删掉")
     for (const a of data.activities) {
       const r = new UITableRow()
-      r.dismissOnSelect = false
+      r.dismissOnSelect = true
       r.height = 46
       const c = r.addText(a.name)
       c.titleColor = new Color(a.hex); c.titleFont = Font.systemFont(17)
-      r.onSelect = async () => {
-        const al = new Alert()
-        al.title = a.name
-        al.addTextField("名字", a.name)
-        al.addAction("改名"); al.addDestructiveAction("删掉"); al.addCancelAction("取消")
-        const k = await al.present()
-        if (k === 0) { a.name = (al.textFieldValue(0) || "").trim() || a.name; persist("改状态名") }
-        if (k === 1) {
-          // 只从能选的里拿掉，已经记下的时段不动
-          data.activities = data.activities.filter(x => x.id !== a.id)
-          persist("删状态")
-        }
-        redraw(); t.reload()
-      }
+      const ref = a
+      r.onSelect = () => { pending = () => renameAct(ref) }
       t.addRow(r)
     }
-    action(t, "＋ 加一个", "#7DD73C", async () => {
-      const al = new Alert()
-      al.title = "新状态"
-      al.addTextField("比如「实习」", "")
-      al.addAction("加上"); al.addCancelAction("取消")
-      if (await al.present() < 0) return
-      const v = (al.textFieldValue(0) || "").trim()
-      if (!v) return
-      const pal = C.DEFAULT_ACTIVITIES.map(x => x.hex)
-      data.activities.push({ id: "c" + uid().slice(0, 6), name: v,
-        hex: pal[data.activities.length % pal.length] })
-      persist("加状态")
-      redraw(); t.reload()
-    })
+    const add = new UITableRow()
+    add.dismissOnSelect = true
+    add.height = 48
+    add.addText("＋ 加一个").titleColor = new Color("#7DD73C")
+    add.onSelect = () => { pending = () => newAct() }
+    t.addRow(add)
+
+    await t.present(true)
+    if (!pending) return
+    const fn = pending; pending = null
+    await fn()
   }
-  redraw()
-  await t.present(true)
+}
+
+async function renameAct(a) {
+  const al = new Alert()
+  al.title = a.name
+  al.addTextField("名字", a.name)
+  al.addAction("改名"); al.addDestructiveAction("删掉"); al.addCancelAction("取消")
+  const k = await al.present()
+  if (k === 0) { a.name = (al.textFieldValue(0) || "").trim() || a.name; persist("改状态名") }
+  // 只从能选的里拿掉，已经记下的时段不动
+  if (k === 1) { data.activities = data.activities.filter(x => x.id !== a.id); persist("删状态") }
+}
+
+async function newAct() {
+  const al = new Alert()
+  al.title = "新状态"
+  al.addTextField("比如「实习」", "")
+  al.addAction("加上"); al.addCancelAction("取消")
+  if (await al.present() < 0) return
+  const v = (al.textFieldValue(0) || "").trim()
+  if (!v) return
+  const pal = C.DEFAULT_ACTIVITIES.map(x => x.hex)
+  data.activities.push({ id: "c" + uid().slice(0, 6), name: v,
+    hex: pal[data.activities.length % pal.length] })
+  persist("加状态")
 }
 
 async function setNudge() {
@@ -357,6 +381,18 @@ function note(t, text, hex) {
   c.titleFont = Font.systemFont(12.5); c.centerAligned()
   t.addRow(r)
 }
+/** 需要弹窗（或开新界面）的行：点了先把表关掉，等表关了再做那件事。 */
+function deferAction(t, defer, text, hex, fn) {
+  const r = new UITableRow()
+  r.dismissOnSelect = true
+  r.height = 48
+  const c = r.addText(text)
+  c.titleFont = Font.systemFont(17)
+  if (hex) c.titleColor = new Color(hex)
+  r.onSelect = () => defer(fn)
+  t.addRow(r)
+}
+
 function action(t, text, hex, fn) {
   const r = new UITableRow()
   r.dismissOnSelect = false

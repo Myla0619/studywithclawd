@@ -14,6 +14,32 @@ HSL 里明度越接近白，能达到的彩度上限越低，所以「又亮又�
 
 **默认是网页界面，「别的 → 简易模式」可以切成 UITable。**
 
+### 在已经展示的 UITable 里弹 Alert，代码会停在那儿
+
+丢数据丢最久的根因。现象是**切状态和打勾能存，加待办和记倒数日存不住**——
+两版都一样，跟中文无关、跟网页也无关。
+
+对上的模式是：**成功的操作都不弹窗，失败的操作都要先弹个框让你输入**。
+在已经全屏 `present` 的 UITable 里 `await alert.present()`，那个 await 多半
+永远不返回，后面的 `C.save` 根本执行不到。
+
+修法：这类行设 `dismissOnSelect = true`，把要做的事记在 `pending` 里，
+表关掉之后再执行、再把表重新打开：
+
+```js
+for (;;) {
+  const t = new UITable()
+  drawTable(t, fn => { pending = fn })
+  await t.present(true)
+  if (!pending) return
+  const fn = pending; pending = null
+  await fn()          // 表已经关了，这时候弹 Alert 是安全的
+}
+```
+
+冒烟测试的 UITable 桩只在第一次展示时模拟点击——表关掉会重新打开，
+再点一次就是死循环。
+
 ### 页面到脚本的载荷必须是纯 ASCII
 
 这是丢数据丢最久的一个坑，值得写清楚。

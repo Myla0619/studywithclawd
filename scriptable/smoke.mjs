@@ -182,7 +182,11 @@ class UITable {
   removeAllRows() { this.rows = [] }
   reload() {}
   async present() {
-    if (SCENARIO.taps) await SCENARIO.taps(this)
+    // 只在第一次展示时模拟点击。表关掉之后会重新打开，再点一次就是死循环。
+    if (SCENARIO.taps && !SCENARIO.__tapped) {
+      SCENARIO.__tapped = true
+      await SCENARIO.taps(this)
+    }
     return null
   }
 }
