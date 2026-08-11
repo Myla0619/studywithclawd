@@ -1,10 +1,16 @@
-// Myla 的一天 — 视图层。
+// Myla 的一天 — 视图层，页面自己就是完整的 app。
 //
-// 这个文件只有长相，一行业务逻辑都没有。页面收到 render(payload) 就画，
-// 用户点了什么就 post 回脚本，脚本改完数据再 render 一次。
+// 为什么不是「脚本画一张、页面显示一张」：
+// 往「已经弹出来的」WebView 里 evaluateJavaScript 送数据是送不到的，第一版就栽在这——
+// render 从没跑过所以白屏，脚本还在等一条永远不会来的消息所以一直转圈。
+// 现在数据在 loadHTML 之前就写进页面，点击也在页面内直接生效，脚本完全不参与交互。
 //
-// 所有图（圆盘、柱状、占比环）都是脚本那边用 DrawContext 画好、转成 base64 传过来的，
-// 页面只负责 <img> 摆位置。这样绘制代码仍然只有 MylaDayCore 一份，小组件和这里画的是同一个。
+// 存盘：每次操作往 LOG 里记一条，带自己的时间戳。关掉窗口之后脚本读 LOG 回放。
+// 所以「14:00 切成学习、14:30 才关窗口」记下来的仍然是 14:00，晚存不影响准确性。
+//
+// 代价：24 小时圆环在这里用 SVG 又画了一遍（脚本那份给小组件用）。圆环几何很简单
+// ——每段就是一天里的起止比例——但这确实是两份实现，改配色要记得两边都改。
+// Clawd 还是脚本画的，按状态预生成成图片传过来。
 //
 // 页面里的 JS 一律不用反引号和 ${}，因为整个文件是被模板字符串包着的。
 
@@ -14,42 +20,28 @@ module.exports.HTML = `
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <style>
 :root {
-  --bg: #F2EEE9;
-  --card: #FFFFFF;
-  --ink: #2A2622;
-  --dim: rgba(42,38,34,.5);
-  --faint: rgba(42,38,34,.28);
-  --line: rgba(42,38,34,.08);
-  --fill: rgba(42,38,34,.05);
-  --bar: rgba(255,255,255,.82);
-  --green: #58C04A;
+  --bg: #F2EEE9; --card: #FFFFFF; --ink: #2A2622;
+  --dim: rgba(42,38,34,.5); --faint: rgba(42,38,34,.28);
+  --line: rgba(42,38,34,.08); --fill: rgba(42,38,34,.05);
+  --bar: rgba(255,255,255,.82); --green: #58C04A;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #131017;
-    --card: #1E1A24;
-    --ink: #F6F1EC;
-    --dim: rgba(246,241,236,.5);
-    --faint: rgba(246,241,236,.28);
-    --line: rgba(246,241,236,.09);
-    --fill: rgba(246,241,236,.07);
-    --bar: rgba(30,26,36,.82);
-    --green: #7DD73C;
+    --bg: #131017; --card: #1E1A24; --ink: #F6F1EC;
+    --dim: rgba(246,241,236,.5); --faint: rgba(246,241,236,.28);
+    --line: rgba(246,241,236,.09); --fill: rgba(246,241,236,.07);
+    --bar: rgba(30,26,36,.82); --green: #7DD73C;
   }
 }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
   background: var(--bg); color: var(--ink);
   font: 400 17px/1.4 -apple-system, "SF Pro Text", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased; overscroll-behavior: none;
 }
 body { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
 
-/* ---------------------------------------------------------------- 骨架 */
-header {
-  padding: calc(env(safe-area-inset-top) + 14px) 20px 6px;
-}
+header { padding: calc(env(safe-area-inset-top) + 14px) 20px 6px; }
 h1 { font: 700 30px/1.2 -apple-system, system-ui; letter-spacing: -.5px; }
 header .sub { color: var(--dim); font-size: 14px; margin-top: 3px; }
 main { padding: 8px 16px 24px; }
@@ -58,19 +50,16 @@ main { padding: 8px 16px 24px; }
   background: var(--card); border-radius: 20px; padding: 16px;
   margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05);
 }
-.card.tight { padding: 8px 6px; }
 .card h2 {
   font: 600 13px/1 -apple-system, system-ui; letter-spacing: .3px;
-  color: var(--dim); text-transform: none; margin: 2px 4px 12px;
+  color: var(--dim); margin: 2px 4px 12px;
 }
 
-/* ---------------------------------------------------------------- 底部 tab */
 nav {
   position: fixed; left: 0; right: 0; bottom: 0; display: flex;
   background: var(--bar); backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-top: .5px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom);
+  border-top: .5px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
 }
 nav button {
   flex: 1; background: none; border: 0; color: var(--faint);
@@ -81,8 +70,15 @@ nav button .g { font-size: 21px; line-height: 1; }
 nav button.on { color: var(--ink); }
 
 /* ---------------------------------------------------------------- 圆盘 */
-.dial { display: block; width: 100%; max-width: 310px; margin: 4px auto 0; border-radius: 26px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+.dialwrap { position: relative; width: 100%; max-width: 306px; margin: 4px auto 0; }
+.dialwrap svg { display: block; width: 100%; height: auto; }
+.dialface {
+  position: absolute; inset: 26%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; pointer-events: none;
+}
+.dialface img { width: 58%; max-width: 108px; display: block; }
+.dialface .nm { color: #F6F1EC; font: 700 19px/1.1 -apple-system, system-ui; margin-top: 2px; }
+.dialface .ln { color: rgba(246,241,236,.55); font-size: 13px; }
 
 /* ---------------------------------------------------------------- 状态格 */
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -109,7 +105,6 @@ nav button.on { color: var(--ink); }
 .todo .txt { flex: 1; font-size: 16px; line-height: 1.35; word-break: break-word; }
 .todo.done .txt { color: var(--faint); text-decoration: line-through; }
 .todo .at { font-size: 12px; color: var(--faint); flex: none; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.todo .x { color: var(--faint); font-size: 19px; padding: 0 4px; flex: none; }
 .addrow { display: flex; align-items: center; gap: 10px; padding: 12px 4px 4px; border-top: .5px solid var(--line); }
 .addrow input {
   flex: 1; border: 0; background: none; color: var(--ink);
@@ -120,23 +115,21 @@ nav button.on { color: var(--ink); }
 .carry { text-align: center; color: var(--dim); font-size: 14px; padding: 12px 4px 2px; border-top: .5px solid var(--line); }
 
 /* ---------------------------------------------------------------- 切换器 */
-.seg {
-  display: flex; background: var(--fill); border-radius: 11px; padding: 2.5px; gap: 2px;
-  margin-bottom: 10px;
-}
+.seg { display: flex; background: var(--fill); border-radius: 11px; padding: 2.5px; gap: 2px; margin-bottom: 10px; }
 .seg button {
   flex: 1; border: 0; background: none; color: var(--dim); border-radius: 8.5px;
   font: 500 14px -apple-system, system-ui; padding: 7px 0;
 }
-.seg button.on {
-  background: var(--card); color: var(--ink); font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0,0,0,.12);
-}
+.seg button.on { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
-/* ---------------------------------------------------------------- 统计列表 */
-.chart { display: block; width: 100%; margin: 4px 0 2px; }
-.chart.donut { max-width: 300px; margin: 0 auto; border-radius: 24px; }
+/* ---------------------------------------------------------------- 柱状图 */
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 148px; padding: 4px 0 0; }
+.bars .col { flex: 1; display: flex; flex-direction: column-reverse; border-radius: 2px; overflow: hidden; min-width: 0; }
+.bars .col.blank { background: var(--fill); height: 3px !important; align-self: flex-end; border-radius: 2px; }
+.bars .col i { display: block; width: 100%; }
 .note { text-align: center; color: var(--faint); font-size: 12.5px; padding: 8px 0 2px; }
+
+/* ---------------------------------------------------------------- 列表 */
 .row { display: flex; align-items: center; gap: 10px; padding: 13px 4px; border-top: .5px solid var(--line); }
 .row:first-of-type { border-top: 0; }
 .row .d { width: 10px; height: 10px; border-radius: 50%; flex: none; }
@@ -144,22 +137,18 @@ nav button.on { color: var(--ink); }
 .row .p { font-size: 13px; color: var(--faint); width: 40px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
 .row .v { font-size: 14px; color: var(--dim); text-align: right; white-space: nowrap; flex: none; font-variant-numeric: tabular-nums; }
 .row .chev { color: var(--faint); font-size: 15px; }
-
-.stat { display: flex; justify-content: space-between; align-items: baseline; padding: 11px 4px; border-top: .5px solid var(--line); }
+.stat { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 11px 4px; border-top: .5px solid var(--line); }
 .stat:first-of-type { border-top: 0; }
-.stat .k { color: var(--dim); font-size: 14.5px; }
-.stat .v { font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
-
+.stat .k { color: var(--dim); font-size: 14.5px; flex: none; }
+.stat .v { font-size: 16px; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
 .warn { border-radius: 14px; padding: 12px 14px; font-size: 13.5px; line-height: 1.4; margin-bottom: 12px; }
-.link { color: var(--dim); font-size: 15px; padding: 13px 4px; border-top: .5px solid var(--line); display: flex; justify-content: space-between; }
+.link { color: var(--ink); font-size: 16px; padding: 14px 4px; border-top: .5px solid var(--line); display: flex; justify-content: space-between; gap: 12px; }
 .link:first-of-type { border-top: 0; }
+.link .h { color: var(--faint); font-size: 14px; white-space: nowrap; }
 .empty { text-align: center; color: var(--faint); font-size: 14px; padding: 22px 0; }
 
 /* ---------------------------------------------------------------- 弹层 */
-.sheet {
-  position: fixed; inset: 0; z-index: 20; display: none;
-  background: rgba(0,0,0,.42); align-items: flex-end;
-}
+.sheet { position: fixed; inset: 0; z-index: 20; display: none; background: rgba(0,0,0,.42); align-items: flex-end; }
 .sheet.open { display: flex; }
 .sheet .inner {
   background: var(--bg); width: 100%; max-height: 88vh; overflow-y: auto;
@@ -168,20 +157,18 @@ nav button.on { color: var(--ink); }
 }
 @keyframes up { from { transform: translateY(100%) } }
 .grip { width: 36px; height: 5px; border-radius: 3px; background: var(--faint); margin: 0 auto 14px; }
-.sheet h3 { font: 700 22px/1.2 -apple-system, system-ui; margin: 0 4px 14px; }
+.sheet h3 { font: 700 22px/1.25 -apple-system, system-ui; margin: 0 4px 14px; }
+.tip { color: var(--dim); font-size: 14px; margin: -8px 4px 14px; line-height: 1.45; }
 </style>
 
-<header>
-  <h1 id="title">Myla 的一天</h1>
-  <div class="sub" id="sub"></div>
-</header>
+<header><h1>Myla 的一天</h1><div class="sub" id="sub"></div></header>
 <main id="view"></main>
 <nav>
-  <button id="tabToday" onclick="go('today')"><span class="g">◷</span>今天</button>
-  <button id="tabStats" onclick="go('stats')"><span class="g">◔</span>统计</button>
-  <button id="tabMore"  onclick="go('more')"><span class="g">⋯</span>别的</button>
+  <button id="tab-today" onclick="setTab('today')"><span class="g">◷</span>今天</button>
+  <button id="tab-stats" onclick="setTab('stats')"><span class="g">◔</span>统计</button>
+  <button id="tab-more"  onclick="setTab('more')"><span class="g">⋯</span>别的</button>
 </nav>
-<div class="sheet" id="sheet" onclick="closeSheet(event)">
+<div class="sheet" id="sheet" onclick="tapOut(event)">
   <div class="inner" onclick="event.stopPropagation()">
     <div class="grip" onclick="closeSheet()"></div>
     <div id="sheetBody"></div>
@@ -189,209 +176,539 @@ nav button.on { color: var(--ink); }
 </div>
 
 <script>
-// ---------------------------------------------------------------- 通信
-// 脚本那边跑 window.__wait(completion) 来等一条消息；页面这边点一下就发一条。
-// 没人等的时候先排队，不会丢。
-var P = null, send = null, queued = []
+// ---------------------------------------------------------------- 状态
+var P = null                                  // 脚本传进来的数据
+var S = { tab: "today", sheet: null, pending: null }
+var LOG = []                                  // 关窗口时脚本读这个回放
+window.LOG = LOG
 
-function post(msg) {
-  if (send) { var f = send; send = null; f(JSON.stringify(msg)) }
-  else queued.push(msg)
-}
-window.__wait = function (completion) {
-  if (queued.length) completion(JSON.stringify(queued.shift()))
-  else send = completion
-}
+var SPANS = [["周", 7], ["月", 30], ["3个月", 90]]
+var CHARTS = [["柱状", "bar"], ["圆盘", "dial"]]
 
+function log(t, v, v2) { LOG.push({ t: t, v: v, v2: v2, at: Date.now() }) }
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 }
-function go(tab) { post({ t: "tab", v: tab }) }
-
-// ---------------------------------------------------------------- 画
-window.render = function (payload) {
-  P = payload
-  var v = document.getElementById("view")
-  document.getElementById("sub").textContent = P.sub || ""
-  var tabs = { today: "tabToday", stats: "tabStats", more: "tabMore" }
-  for (var k in tabs) document.getElementById(tabs[k]).className = (k === P.tab ? "on" : "")
-
-  if (P.tab === "today") v.innerHTML = viewToday()
-  else if (P.tab === "stats") v.innerHTML = viewStats()
-  else v.innerHTML = viewMore()
-
-  if (P.sheet) openSheet(P.sheet)
-  else document.getElementById("sheet").className = "sheet"
+function nowSec() { return Math.floor(Date.now() / 1000) }
+function hhmm(secs) {
+  var m = Math.round(secs / 60)
+  return m >= 60 ? Math.floor(m / 60) + " 小时 " + (m % 60) + " 分" : m + " 分钟"
+}
+function clock(s) {
+  var d = new Date(s * 1000)
+  return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2)
+}
+function actOf(id) {
+  for (var i = 0; i < P.activities.length; i++) if (P.activities[i].id === id) return P.activities[i]
+  return { id: id, name: id, hex: "#6B6B70" }
+}
+function openSeg() {
+  for (var i = P.segs.length - 1; i >= 0; i--) if (P.segs[i].e == null) return P.segs[i]
+  return null
+}
+function todayTotals() {
+  var t = {}
+  for (var i = 0; i < P.segs.length; i++) {
+    var s = P.segs[i]
+    var end = s.e == null ? nowSec() : s.e
+    t[s.a] = (t[s.a] || 0) + Math.max(0, end - s.s)
+  }
+  return t
 }
 
-function warnHTML() {
-  if (!P.warn) return ""
-  return '<div class="warn" style="background:' + P.warn.hex + '22;color:' + P.warn.hex + '">'
-    + esc(P.warn.text) + '</div>'
+window.boot = function (payload) {
+  P = payload
+  S.span = P.span; S.chart = P.chart
+  document.getElementById("sub").textContent = P.sub
+  draw()
+}
+
+function setTab(t) { S.tab = t; S.sheet = null; draw() }
+
+function draw() {
+  var names = ["today", "stats", "more"]
+  for (var i = 0; i < names.length; i++) {
+    document.getElementById("tab-" + names[i]).className = names[i] === S.tab ? "on" : ""
+  }
+  var v = document.getElementById("view")
+  v.innerHTML = S.tab === "today" ? viewToday() : S.tab === "stats" ? viewStats() : viewMore()
+  var sh = document.getElementById("sheet")
+  if (S.sheet) { document.getElementById("sheetBody").innerHTML = S.sheet; sh.className = "sheet open" }
+  else sh.className = "sheet"
+}
+
+// ---------------------------------------------------------------- 24 小时圆环
+// 跟脚本里 drawDial 同一套几何：0 点在正上方顺时针，每段就是一天里的起止比例。
+function ringPath(cx, cy, rIn, rOut, t0, t1) {
+  if (t1 - t0 >= 0.5) {                       // SVG 的弧画不了半圈以上，劈成两半
+    var mid = (t0 + t1) / 2
+    return ringPath(cx, cy, rIn, rOut, t0, mid) + " " + ringPath(cx, cy, rIn, rOut, mid, t1)
+  }
+  var a0 = t0 * 2 * Math.PI - Math.PI / 2, a1 = t1 * 2 * Math.PI - Math.PI / 2
+  function pt(a, r) { return (cx + Math.cos(a) * r).toFixed(2) + " " + (cy + Math.sin(a) * r).toFixed(2) }
+  return "M" + pt(a0, rOut) + " A" + rOut + " " + rOut + " 0 0 1 " + pt(a1, rOut)
+    + " L" + pt(a1, rIn) + " A" + rIn + " " + rIn + " 0 0 0 " + pt(a0, rIn) + " Z"
+}
+
+function dialSVG() {
+  var N = 300, cx = 150, cy = 150, rOut = 149, rIn = rOut * 0.74
+  var h = '<svg viewBox="0 0 ' + N + ' ' + N + '">'
+  h += '<circle cx="150" cy="150" r="150" fill="#1B1720"/>'
+  h += '<path d="' + ringPath(cx, cy, rIn, rOut, 0, 1) + '" fill="#FFFFFF" fill-opacity=".07"/>'
+  for (var i = 0; i < P.segs.length; i++) {
+    var s = P.segs[i]
+    var t0 = Math.min(1, Math.max(0, (s.s - P.dayStart) / 86400))
+    var t1 = Math.min(1, Math.max(0, ((s.e == null ? nowSec() : s.e) - P.dayStart) / 86400))
+    if (t1 <= t0) continue
+    h += '<path d="' + ringPath(cx, cy, rIn, rOut, t0, t1) + '" fill="' + actOf(s.a).hex + '"/>'
+  }
+  for (var k = 0; k < 24; k += 3) {                      // 三小时一个刻度
+    var a = k / 24 * 2 * Math.PI - Math.PI / 2
+    var r0 = rIn - 3.6, r1 = rIn - 13.5
+    h += '<line x1="' + (cx + Math.cos(a) * r0).toFixed(2) + '" y1="' + (cy + Math.sin(a) * r0).toFixed(2)
+      + '" x2="' + (cx + Math.cos(a) * r1).toFixed(2) + '" y2="' + (cy + Math.sin(a) * r1).toFixed(2)
+      + '" stroke="#FFFFFF" stroke-opacity="' + (k === 0 ? ".45" : ".18") + '" stroke-width="1.8"/>'
+  }
+  return h + '</svg>'
 }
 
 function viewToday() {
-  var h = warnHTML()
+  var t = todayTotals(), open = openSeg()
+  var acc = 0
+  for (var k in t) acc += t[k]
 
-  // 圆盘自带深色圆角卡片，外面不用再套一层。中间也已经写了当前状态和已经多久，
-  // 底下不再重复一遍。
-  h += '<img class="dial" src="' + P.dial + '">'
-    + '<div class="note" style="padding-bottom:14px">' + esc(P.acc) + '</div>'
+  var h = ""
+  if (P.warn) {
+    h += '<div class="warn" style="background:' + P.warn.hex + '22;color:' + P.warn.hex + '">'
+      + esc(P.warn.text) + '</div>'
+  }
 
-  if (P.split) {
-    h += '<div class="card" onclick="post({t:\\'split\\'})" style="color:#F99243;font-size:14.5px">'
-      + '✂︎ ' + esc(P.split) + '</div>'
+  var a = open ? actOf(open.a) : null
+  h += '<div class="dialwrap">' + dialSVG() + '<div class="dialface">'
+    + '<img src="' + (P.clawd[open ? open.a : "_"] || P.clawd["_"]) + '">'
+    + (a ? '<div class="nm">' + esc(a.name) + '</div>'
+         + '<div class="ln">已经 ' + hhmm(nowSec() - open.s) + '</div>' : "")
+    + '</div></div>'
+  h += '<div class="note" style="padding-bottom:14px">今天已记录 ' + hhmm(acc) + '</div>'
+
+  // 睡着了没人能替你点，长得离谱的一段主动问一句
+  if (open && nowSec() - open.s > 4 * 3600) {
+    h += '<div class="card" style="color:#F99243;font-size:14.5px" onclick="askSplit(\\'' + open.id + '\\')">'
+      + '✂︎ 这一段已经 ' + hhmm(nowSec() - open.s) + '，中间换过吗？</div>'
   }
 
   h += '<div class="card"><h2>现在在做</h2><div class="grid">'
-  for (var i = 0; i < P.acts.length; i++) {
-    var a = P.acts[i]
-    h += '<div class="act' + (a.on ? " on" : "") + '"'
-      + (a.on ? ' style="color:' + a.hex + '"' : "")
-      + ' onclick="post({t:\\'switch\\',v:\\'' + a.id + '\\'})">'
-      + '<i class="d" style="background:' + a.hex + '"></i>'
-      + '<span class="n"' + (a.on ? ' style="color:var(--ink)"' : "") + '>' + esc(a.name) + '</span>'
-      + (a.len ? '<span class="t">' + esc(a.len) + '</span>' : "")
+  for (var i = 0; i < P.activities.length; i++) {
+    var x = P.activities[i], on = open && open.a === x.id
+    h += '<div class="act' + (on ? " on" : "") + '"' + (on ? ' style="color:' + x.hex + '"' : "")
+      + ' onclick="switchTo(\\'' + x.id + '\\')">'
+      + '<i class="d" style="background:' + x.hex + '"></i>'
+      + '<span class="n"' + (on ? ' style="color:var(--ink)"' : "") + '>' + esc(x.name) + '</span>'
+      + (t[x.id] ? '<span class="t">' + hhmm(t[x.id]) + '</span>' : "")
       + '</div>'
   }
   h += '</div></div>'
 
-  h += '<div class="card"><h2>' + esc(P.todoTitle) + '</h2>'
-  for (var j = 0; j < P.todos.length; j++) {
-    var it = P.todos[j]
+  var left = 0
+  for (var j = 0; j < P.todos.length; j++) if (!P.todos[j].done) left++
+  h += '<div class="card"><h2>' + (left ? "今天要做的 · 还剩 " + left + " 条" : "今天要做的") + '</h2>'
+  var sorted = P.todos.slice().sort(function (m, n) { return (m.done ? 1 : 0) - (n.done ? 1 : 0) })
+  for (var q = 0; q < sorted.length; q++) {
+    var it = sorted[q]
     h += '<div class="todo' + (it.done ? " done" : "") + '">'
-      + '<div class="box" onclick="post({t:\\'todo.toggle\\',v:\\'' + it.id + '\\'})">' + (it.done ? "✓" : "") + '</div>'
-      + '<div class="txt" onclick="post({t:\\'todo.edit\\',v:\\'' + it.id + '\\'})">' + esc(it.text) + '</div>'
-      + (it.at ? '<div class="at">' + esc(it.at) + '</div>' : "")
+      + '<div class="box" onclick="toggleTodo(\\'' + it.id + '\\')">' + (it.done ? "✓" : "") + '</div>'
+      + '<div class="txt" onclick="editTodo(\\'' + it.id + '\\')">' + esc(it.text) + '</div>'
+      + (it.done && it.doneAt ? '<div class="at">' + clock(Math.floor(it.doneAt / 1000)) + '</div>' : "")
       + '</div>'
   }
   h += '<div class="addrow"><span class="plus">＋</span>'
     + '<input id="newTodo" placeholder="加一条" enterkeyhint="done"'
-    + ' onkeydown="if(event.key===\\'Enter\\'){addTodo();event.preventDefault()}"'
-    + ' onblur="addTodo()"></div>'
+    + ' onkeydown="if(event.key===\\'Enter\\'){addTodo();event.preventDefault()}" onblur="addTodo()"></div>'
   if (!P.todos.length && P.carry) {
-    h += '<div class="carry" onclick="post({t:\\'todo.carry\\'})">昨天还剩 ' + P.carry + ' 条，搬过来？</div>'
+    h += '<div class="carry" onclick="carryOver()">昨天还剩 ' + P.carry + ' 条，搬过来？</div>'
   }
-  h += '</div>'
-  return h
+  return h + '</div>'
 }
 
+// ---------------------------------------------------------------- 今天的操作
+function switchTo(id) {
+  var open = openSeg()
+  if (open && open.a === id) return
+  var t = nowSec()
+  if (open) open.e = t
+  P.segs.push({ id: "l" + LOG.length + "" + t, a: id, s: t, e: null })
+  log("switch", id)
+  draw()
+}
+function toggleTodo(id) {
+  for (var i = 0; i < P.todos.length; i++) if (P.todos[i].id === id) {
+    P.todos[i].done = !P.todos[i].done
+    P.todos[i].doneAt = P.todos[i].done ? Date.now() : null
+    log("todo.toggle", id)
+  }
+  draw()
+}
 function addTodo() {
   var el = document.getElementById("newTodo")
   if (!el) return
   var v = el.value.trim()
   el.value = ""
-  if (v) post({ t: "todo.add", v: v })
+  if (!v) return
+  var id = "n" + LOG.length + "" + Date.now()
+  P.todos.push({ id: id, text: v, done: false })
+  log("todo.add", v, id)
+  draw()
 }
-
-function viewStats() {
-  var h = '<div class="card tight">'
-  h += '<div style="padding:4px 6px 0">' + seg(P.spans, P.span, "span") + seg(P.charts, P.chart, "chart") + '</div>'
-  h += '<img class="chart' + (P.chart === "dial" ? " donut" : "") + '" src="' + P.chartImg + '">'
-  h += '<div class="note">' + esc(P.note) + '</div></div>'
-
-  h += '<div class="card"><h2>点开看单项</h2>'
-  if (!P.rows.length) h += '<div class="empty">这段时间还没有记录</div>'
-  for (var i = 0; i < P.rows.length; i++) {
-    var r = P.rows[i]
-    h += '<div class="row" onclick="post({t:\\'detail\\',v:\\'' + r.id + '\\'})">'
-      + '<i class="d" style="background:' + r.hex + '"></i>'
-      + '<span class="n">' + esc(r.name) + '</span>'
-      + '<span class="p">' + esc(r.pct) + '</span>'
-      + '<span class="v">' + esc(r.len) + '</span>'
-      + '<span class="chev">›</span></div>'
+function carryOver() { log("todo.carry"); P.carry = 0; alertSaved("下次打开就在了"); }
+function editTodo(id) {
+  var cur = ""
+  for (var i = 0; i < P.todos.length; i++) if (P.todos[i].id === id) cur = P.todos[i].text
+  S.sheet = '<h3>改这一条</h3>'
+    + '<div class="card"><div class="addrow" style="border:0;padding:4px">'
+    + '<input id="si" value="' + esc(cur) + '" enterkeyhint="done"'
+    + ' onkeydown="if(event.key===\\'Enter\\'){saveTodo(\\'' + id + '\\');event.preventDefault()}"></div></div>'
+    + '<div class="card"><div class="link" style="color:var(--green)" onclick="saveTodo(\\'' + id + '\\')">'
+    + '<span>改好了</span><span></span></div>'
+    + '<div class="link" style="color:#F2363C" onclick="delTodo(\\'' + id + '\\')">'
+    + '<span>删掉</span><span></span></div></div>'
+  draw()
+  focusInput()
+}
+function saveTodo(id) {
+  var el = document.getElementById("si")
+  var v = el ? el.value.trim() : ""
+  if (v) {
+    for (var i = 0; i < P.todos.length; i++) if (P.todos[i].id === id) P.todos[i].text = v
+    log("todo.save", v, id)
   }
-  h += '</div>'
-  return h
+  S.sheet = null; draw()
+}
+function delTodo(id) {
+  P.todos = P.todos.filter(function (x) { return x.id !== id })
+  log("todo.del", id)
+  S.sheet = null; draw()
 }
 
-function seg(opts, cur, key) {
-  var h = '<div class="seg">'
-  for (var i = 0; i < opts.length; i++) {
-    h += '<button class="' + (opts[i][1] === cur ? "on" : "") + '"'
-      + ' onclick="post({t:\\'' + key + '\\',v:' + JSON.stringify(opts[i][1]) + '})">'
-      + esc(opts[i][0]) + '</button>'
+// ---------------------------------------------------------------- 统计
+function bucketsOf(span) {
+  var out = []
+  var perWeek = span > 31
+  var today = todayTotals()
+  function dayTotals(back) {
+    if (back === 0) return P.segs.length ? today : null
+    var d = new Date(Date.now() - back * 86400000)
+    var key = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2)
+    return P.days[key] || null
+  }
+  if (!perWeek) {
+    for (var back = span - 1; back >= 0; back--) {
+      var t = dayTotals(back)
+      out.push({ totals: t || {}, has: !!t, cap: 86400 })
+    }
+    return out
+  }
+  for (var w = Math.ceil(span / 7) - 1; w >= 0; w--) {
+    var totals = {}, has = false
+    for (var i = 0; i < 7; i++) {
+      var b = w * 7 + i
+      if (b >= span) continue
+      var d2 = dayTotals(b)
+      if (!d2) continue
+      has = true
+      for (var k in d2) totals[k] = (totals[k] || 0) + d2[k]
+    }
+    out.push({ totals: totals, has: has, cap: 7 * 86400 })
+  }
+  return out
+}
+
+function barsHTML(bs, onlyID) {
+  // 满格 = 一天 8 小时（按周的桶就是一周 8 小时 × 7）
+  var full = bs.length && bs[0].cap > 86400 ? 8 * 3600 * 7 : 8 * 3600
+  var h = '<div class="bars">'
+  for (var i = 0; i < bs.length; i++) {
+    var b = bs[i]
+    if (!b.has) { h += '<div class="col blank"></div>'; continue }
+    if (onlyID) {
+      var secs = b.totals[onlyID] || 0
+      var pct = Math.max(1.5, Math.min(100, secs / full * 100))
+      h += '<div class="col" style="height:' + pct.toFixed(1) + '%">'
+        + '<i style="height:100%;background:' + actOf(onlyID).hex + '"></i></div>'
+      continue
+    }
+    var used = 0
+    for (var k in b.totals) used += b.totals[k]
+    var inner = ""
+    for (var j = 0; j < P.activities.length; j++) {
+      var a = P.activities[j], s = b.totals[a.id] || 0
+      if (!s) continue
+      inner += '<i style="height:' + (s / used * 100).toFixed(2) + '%;background:' + a.hex + '"></i>'
+    }
+    h += '<div class="col" style="height:' + (used / b.cap * 100).toFixed(1) + '%">' + inner + '</div>'
   }
   return h + '</div>'
 }
 
+function donutHTML(agg) {
+  var total = 0
+  for (var k in agg) total += agg[k]
+  var N = 300, cx = 150, cy = 150, rOut = 128, rIn = 79
+  var h = '<svg viewBox="0 0 ' + N + ' ' + N + '" style="max-width:300px;margin:0 auto;display:block">'
+  h += '<rect width="300" height="300" rx="26" fill="#1B1720"/>'
+  h += '<path d="' + ringPath(cx, cy, rIn, rOut, 0, 1) + '" fill="#FFFFFF" fill-opacity=".07"/>'
+  var ranked = P.activities.filter(function (a) { return agg[a.id] > 0 })
+    .sort(function (x, y) { return agg[y.id] - agg[x.id] })
+  var t = 0
+  for (var i = 0; i < ranked.length; i++) {
+    var f = agg[ranked[i].id] / total
+    h += '<path d="' + ringPath(cx, cy, rIn, rOut, t, t + f) + '" fill="' + ranked[i].hex + '"/>'
+    t += f
+  }
+  h += '<text x="150" y="152" text-anchor="middle" fill="#F6F1EC" font-size="34" font-weight="700"'
+    + ' font-family="-apple-system,system-ui">' + (total ? Math.round(total / 3600) + " 小时" : "没有记录") + '</text>'
+  return h + '</svg>'
+}
+
+function viewStats() {
+  var bs = bucketsOf(S.span)
+  var agg = {}, total = 0
+  for (var i = 0; i < bs.length; i++) for (var k in bs[i].totals) agg[k] = (agg[k] || 0) + bs[i].totals[k]
+  for (var q in agg) total += agg[q]
+
+  var recorded = 0
+  for (var back = 0; back < S.span; back++) {
+    if (back === 0) { if (P.segs.length) recorded++; continue }
+    var d = new Date(Date.now() - back * 86400000)
+    var key = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2)
+    if (P.days[key]) recorded++
+  }
+
+  var h = '<div class="card">' + segHTML(SPANS, S.span, "setSpan") + segHTML(CHARTS, S.chart, "setChart")
+  if (S.chart === "dial") {
+    var from = new Date(Date.now() - (S.span - 1) * 86400000)
+    h += donutHTML(agg)
+    h += '<div class="note">' + (from.getMonth() + 1) + '月' + from.getDate() + '日 起 · 有记录 ' + recorded + ' 天</div>'
+  } else {
+    h += barsHTML(bs, null)
+    h += '<div class="note">' + (S.span > 31 ? "一根柱子是一周" : "一根柱子是一天")
+      + '，' + S.span + ' 天里有记录的 ' + recorded + ' 天</div>'
+  }
+  h += '</div>'
+
+  h += '<div class="card"><h2>点开看单项</h2>'
+  var ranked = P.activities.filter(function (a) { return (agg[a.id] || 0) >= 60 })
+    .sort(function (x, y) { return agg[y.id] - agg[x.id] })
+  if (!ranked.length) h += '<div class="empty">这段时间还没有记录</div>'
+  for (var r = 0; r < ranked.length; r++) {
+    var a = ranked[r]
+    h += '<div class="row" onclick="showDetail(\\'' + a.id + '\\')">'
+      + '<i class="d" style="background:' + a.hex + '"></i>'
+      + '<span class="n">' + esc(a.name) + '</span>'
+      + '<span class="p">' + (total ? Math.round(agg[a.id] / total * 100) + "%" : "") + '</span>'
+      + '<span class="v">' + hhmm(agg[a.id]) + '</span><span class="chev">›</span></div>'
+  }
+  return h + '</div>'
+}
+
+function segHTML(opts, cur, fn) {
+  var h = '<div class="seg">'
+  for (var i = 0; i < opts.length; i++) {
+    h += '<button class="' + (opts[i][1] === cur ? "on" : "") + '" onclick="' + fn
+      + '(' + JSON.stringify(opts[i][1]) + ')">' + esc(opts[i][0]) + '</button>'
+  }
+  return h + '</div>'
+}
+function setSpan(v) { S.span = v; log("span", v); draw() }
+function setChart(v) { S.chart = v; log("chart", v); draw() }
+
+function showDetail(id) {
+  var a = actOf(id), bs = bucketsOf(S.span), weekly = S.span > 31
+  var total = 0, withAny = 0
+  for (var i = 0; i < bs.length; i++) {
+    var s = bs[i].totals[id] || 0
+    total += s
+    if (s > 0) withAny++
+  }
+  var h = '<h3>' + esc(a.name) + '</h3>'
+  h += '<div class="card">' + barsHTML(bs, id)
+    + '<div class="note">近 ' + S.span + ' 天，' + (weekly ? "一根柱子是一周" : "一根柱子是一天") + '</div></div>'
+  h += '<div class="card">'
+    + stat("总计", hhmm(total))
+    + stat(weekly ? "有记录的周平均" : "有记录的天平均", withAny ? hhmm(total / withAny) : "—")
+    + stat(weekly ? "出现过的周" : "出现过的天", withAny + " / " + bs.length)
+    + '</div>'
+
+  var mine = P.segs.filter(function (s) { return s.a === id })
+  h += '<div class="card"><h2>今天的时段（点一段可以拆开）</h2>'
+  if (!mine.length) h += '<div class="empty">今天还没有</div>'
+  for (var j = 0; j < mine.length; j++) {
+    var s2 = mine[j]
+    h += '<div class="row" onclick="askSplit(\\'' + s2.id + '\\')">'
+      + '<span class="n" style="color:' + a.hex + '">' + clock(s2.s) + ' – '
+      + (s2.e == null ? "现在" : clock(s2.e)) + '</span>'
+      + '<span class="v">' + hhmm((s2.e == null ? nowSec() : s2.e) - s2.s) + '</span></div>'
+  }
+  S.sheet = h + '</div>'
+  draw()
+}
+function stat(k, v) {
+  return '<div class="stat"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'
+}
+
+// ---------------------------------------------------------------- 拆分
+function askSplit(segID) {
+  var seg = null
+  for (var i = 0; i < P.segs.length; i++) if (P.segs[i].id === segID) seg = P.segs[i]
+  if (!seg) return
+  var end = seg.e == null ? nowSec() : seg.e
+  S.pending = segID
+  S.sheet = '<h3>' + clock(seg.s) + ' – ' + (seg.e == null ? "现在" : clock(seg.e)) + '</h3>'
+    + '<div class="tip">从几点起换成别的了？填了之后选后半段是什么。</div>'
+    + '<div class="card"><div class="addrow" style="border:0;padding:4px">'
+    + '<input id="si" placeholder="比如 23:30" value="' + clock(Math.floor((seg.s + end) / 2)) + '"'
+    + ' onkeydown="if(event.key===\\'Enter\\'){splitNext();event.preventDefault()}"></div></div>'
+    + '<div class="card"><div class="link" style="color:var(--green)" onclick="splitNext()">'
+    + '<span>下一步</span><span></span></div></div>'
+  draw()
+  focusInput()
+}
+function splitNext() {
+  var el = document.getElementById("si")
+  var raw = el ? el.value.trim() : ""
+  var m = raw.match(/^(\\d{1,2})[:：](\\d{2})$/)
+  var seg = null
+  for (var i = 0; i < P.segs.length; i++) if (P.segs[i].id === S.pending) seg = P.segs[i]
+  if (!seg) { closeSheet(); return }
+  var end = seg.e == null ? nowSec() : seg.e
+  if (!m) return alertSheet("时间要写成 23:30 这样")
+  var base = new Date(seg.s * 1000)
+  base.setHours(Number(m[1]), Number(m[2]), 0, 0)
+  var when = Math.floor(base.getTime() / 1000)
+  if (when <= seg.s) when += 86400          // 跨零点的段
+  if (when <= seg.s || when >= end) return alertSheet("这个时间不在这一段里")
+
+  var h = '<h3>后半段是什么？</h3><div class="card">'
+  for (var j = 0; j < P.activities.length; j++) {
+    var a = P.activities[j]
+    h += '<div class="link" onclick="doSplit(' + when + ',\\'' + a.id + '\\')">'
+      + '<span style="color:' + a.hex + '">' + esc(a.name) + '</span><span></span></div>'
+  }
+  S.sheet = h + '</div>'
+  draw()
+}
+function doSplit(when, laterID) {
+  var i = -1
+  for (var k = 0; k < P.segs.length; k++) if (P.segs[k].id === S.pending) i = k
+  if (i < 0) { closeSheet(); return }
+  var old = P.segs[i]
+  P.segs.splice(i + 1, 0, { id: "s" + when, a: laterID, s: when, e: old.e })
+  // 记起点而不是 id：页面里新开的那些段 id 是页面自己编的，脚本回放时对不上号，
+  // 起点秒数两边一定一致。
+  log("split", old.s, { when: when, later: laterID })
+  old.e = when
+  S.pending = null; S.sheet = null
+  draw()
+}
+function alertSheet(msg) {
+  var b = document.getElementById("sheetBody")
+  if (b) b.insertAdjacentHTML("afterbegin",
+    '<div class="warn" style="background:#F2363C22;color:#F2363C">' + esc(msg) + '</div>')
+}
+
+// ---------------------------------------------------------------- 别的
 function viewMore() {
   var h = '<div class="card">'
-  for (var i = 0; i < P.links.length; i++) {
-    h += '<div class="link" onclick="post({t:\\'' + P.links[i].t + '\\'})">'
-      + '<span>' + esc(P.links[i].label) + '</span>'
-      + '<span style="color:var(--faint)">' + esc(P.links[i].hint || "") + ' ›</span></div>'
-  }
-  h += '</div><div class="note">版本 ' + esc(P.version) + '</div>'
+    + '<div class="link" onclick="manage()"><span>管理状态</span><span class="h">'
+    + P.activities.length + ' 个 ›</span></div>'
+    + '<div class="link" onclick="nudge()"><span>定时问一句</span><span class="h">'
+    + (P.nudge === 0 ? "关着" : P.nudge + " 分钟") + ' ›</span></div>'
+    + '<div class="link" onclick="wantExport()"><span>导出一份备份</span><span class="h">存到「文件」›</span></div>'
+    + '</div>'
+  h += '<div class="note">版本 ' + esc(P.version) + '</div>'
+  h += '<div class="note" style="padding-top:14px;line-height:1.5">改动在你关掉这个窗口时存盘，<br>每条都带自己发生的时间，晚存不影响记录</div>'
   return h
+}
+function manage() {
+  var h = '<h3>管理状态</h3><div class="card">'
+  for (var i = 0; i < P.activities.length; i++) {
+    var a = P.activities[i]
+    h += '<div class="link" onclick="editAct(\\'' + a.id + '\\')">'
+      + '<span style="color:' + a.hex + '">' + esc(a.name) + '</span><span class="h">›</span></div>'
+  }
+  h += '<div class="link" style="color:var(--green)" onclick="newAct()"><span>＋ 加一个</span><span></span></div>'
+  S.sheet = h + '</div>'
+  draw()
+}
+function editAct(id) {
+  var a = actOf(id)
+  S.sheet = '<h3>' + esc(a.name) + '</h3>'
+    + '<div class="card"><div class="addrow" style="border:0;padding:4px">'
+    + '<input id="si" value="' + esc(a.name) + '"></div></div>'
+    + '<div class="card"><div class="link" style="color:var(--green)" onclick="saveAct(\\'' + id + '\\')">'
+    + '<span>改好了</span><span></span></div>'
+    + '<div class="link" style="color:#F2363C" onclick="delAct(\\'' + id + '\\')">'
+    + '<span>删掉</span><span class="h">已经记下的时段不动</span></div></div>'
+  draw(); focusInput()
+}
+function saveAct(id) {
+  var el = document.getElementById("si"), v = el ? el.value.trim() : ""
+  if (v) { actOf(id).name = v; log("act.rename", v, id) }
+  S.sheet = null; draw()
+}
+function delAct(id) {
+  P.activities = P.activities.filter(function (x) { return x.id !== id })
+  log("act.del", id)
+  S.sheet = null; draw()
+}
+function newAct() {
+  S.sheet = '<h3>新状态</h3>'
+    + '<div class="card"><div class="addrow" style="border:0;padding:4px">'
+    + '<input id="si" placeholder="比如「实习」"></div></div>'
+    + '<div class="card"><div class="link" style="color:var(--green)" onclick="addAct()">'
+    + '<span>加上</span><span></span></div></div>'
+  draw(); focusInput()
+}
+function addAct() {
+  var el = document.getElementById("si"), v = el ? el.value.trim() : ""
+  if (v) {
+    var id = "c" + Date.now()
+    P.activities.push({ id: id, name: v, hex: P.palette[P.activities.length % P.palette.length] })
+    log("act.add", v, id)
+  }
+  S.sheet = null; draw()
+}
+function nudge() {
+  var opts = [45, 60, 90, 120, 180]
+  var h = '<h3>隔多久问一次？</h3>'
+    + '<div class="tip">超过这个时长没换状态就推一条通知，通知上直接能改。</div><div class="card">'
+  for (var i = 0; i < opts.length; i++) {
+    h += '<div class="link" onclick="setNudge(' + opts[i] + ')"><span>' + opts[i] + ' 分钟</span>'
+      + '<span class="h">' + (P.nudge === opts[i] ? "现在是这个" : "") + '</span></div>'
+  }
+  h += '<div class="link" style="color:#F2363C" onclick="setNudge(0)"><span>关掉提醒</span><span></span></div>'
+  S.sheet = h + '</div>'
+  draw()
+}
+function setNudge(v) { P.nudge = v; log("nudge", v); S.sheet = null; draw() }
+function wantExport() {
+  log("export")
+  S.sheet = '<h3>关掉窗口就会弹出保存框</h3>'
+    + '<div class="tip">导出要用系统的「文件」选择器，它盖不到这个窗口上面，'
+    + '所以得等这个窗口关掉。往下滑关掉就行。</div>'
+  draw()
+}
+function alertSaved(msg) {
+  S.sheet = '<h3>' + esc(msg) + '</h3><div class="tip">改动在关掉窗口时存盘。</div>'
+  draw()
 }
 
 // ---------------------------------------------------------------- 弹层
-function openSheet(s) {
-  var b = document.getElementById("sheetBody")
-  var h = '<h3>' + esc(s.title) + '</h3>'
-
-  if (s.kind === "detail") {
-    h += '<div class="card tight"><img class="chart" src="' + s.img + '">'
-      + '<div class="note">' + esc(s.note) + '</div></div>'
-    h += '<div class="card">'
-    for (var i = 0; i < s.stats.length; i++) {
-      h += '<div class="stat"><span class="k">' + esc(s.stats[i][0]) + '</span>'
-        + '<span class="v">' + esc(s.stats[i][1]) + '</span></div>'
-    }
-    h += '</div>'
-    if (s.spans && s.spans.length) {
-      h += '<div class="card"><h2>今天的时段（点一段可以拆开）</h2>'
-      for (var j = 0; j < s.spans.length; j++) {
-        h += '<div class="row" onclick="post({t:\\'split.seg\\',v:\\'' + s.spans[j].id + '\\'})">'
-          + '<span class="n" style="color:' + s.hex + '">' + esc(s.spans[j].when) + '</span>'
-          + '<span class="v">' + esc(s.spans[j].len) + '</span></div>'
-      }
-      h += '</div>'
-    }
-  }
-
-  if (s.kind === "list") {
-    h += '<div class="card">'
-    for (var k = 0; k < s.items.length; k++) {
-      h += '<div class="link" onclick="post({t:\\'' + s.act + '\\',v:' + JSON.stringify(s.items[k].v) + '})">'
-        + '<span' + (s.items[k].hex ? ' style="color:' + s.items[k].hex + '"' : "") + '>'
-        + esc(s.items[k].label) + '</span>'
-        + '<span style="color:var(--faint)">' + esc(s.items[k].hint || "") + '</span></div>'
-    }
-    h += '</div>'
-  }
-
-  if (s.kind === "input") {
-    h += '<div class="card"><div class="addrow" style="border:0;padding:4px">'
-      + '<input id="sheetInput" placeholder="' + esc(s.placeholder || "") + '"'
-      + ' value="' + esc(s.value || "") + '" enterkeyhint="done"'
-      + ' onkeydown="if(event.key===\\'Enter\\'){sheetOK();event.preventDefault()}"></div></div>'
-    h += '<div class="card"><div class="link" onclick="sheetOK()" style="color:var(--green)">'
-      + '<span>' + esc(s.ok || "好了") + '</span><span></span></div>'
-    if (s.destructive) {
-      h += '<div class="link" onclick="post({t:\\'' + s.destructive + '\\',v:' + JSON.stringify(s.value2) + '})"'
-        + ' style="color:#F2363C"><span>删掉</span><span></span></div>'
-    }
-    h += '</div>'
-  }
-
-  b.innerHTML = h
-  document.getElementById("sheet").className = "sheet open"
-  var inp = document.getElementById("sheetInput")
-  if (inp) setTimeout(function () { inp.focus() }, 120)
-}
-
-function sheetOK() {
-  var inp = document.getElementById("sheetInput")
-  post({ t: P.sheet.submit, v: inp ? inp.value.trim() : "", v2: P.sheet.value2 })
-}
-
-function closeSheet(e) {
-  if (e && e.target && e.target.id !== "sheet") return
-  document.getElementById("sheet").className = "sheet"
-  post({ t: "close" })
+function closeSheet() { S.sheet = null; S.pending = null; draw() }
+function tapOut(e) { if (e.target.id === "sheet") closeSheet() }
+function focusInput() {
+  var el = document.getElementById("si")
+  if (el) setTimeout(function () { el.focus(); el.select() }, 140)
 }
 </script>
 `
