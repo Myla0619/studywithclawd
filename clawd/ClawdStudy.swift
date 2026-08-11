@@ -374,6 +374,8 @@ enum Hit {
     case expand
     case resume
     case discard
+    case hide
+    case quitApp
 }
 
 // MARK: - View
@@ -1008,6 +1010,22 @@ final class ClawdView: NSView {
         }
     }
 
+    override func rightMouseDown(with e: NSEvent) {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "隐藏（计时继续走）",
+                     action: #selector(menuHide), keyEquivalent: "").target = self
+        menu.addItem(withTitle: collapsed ? "展开" : "收起成贴纸",
+                     action: #selector(menuFold), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "退出 Clawd",
+                     action: #selector(menuQuit), keyEquivalent: "").target = self
+        NSMenu.popUpContextMenu(menu, with: e, for: self)
+    }
+
+    @objc private func menuHide() { onHit?(.hide) }
+    @objc private func menuFold() { onHit?(collapsed ? .expand : .collapse) }
+    @objc private func menuQuit() { onHit?(.quitApp) }
+
     override func mouseDragged(with e: NSEvent) {
         guard dragging, let w = window else { return }
         let now = NSEvent.mouseLocation
@@ -1112,6 +1130,7 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         if FileManager.default.fileExists(atPath: root + "/find") {
             try? FileManager.default.removeItem(atPath: root + "/find")
             try? FileManager.default.removeItem(atPath: root + "/collapsed")
+            try? FileManager.default.removeItem(atPath: root + "/hidden")
             view.collapsed = false
             resize()
             window.setFrameOrigin(defaultPos())
@@ -1119,6 +1138,10 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             savePos()
             window.orderFrontRegardless()
         }
+
+        let wantHidden = FileManager.default.fileExists(atPath: root + "/hidden")
+        if wantHidden && window.isVisible { window.orderOut(nil) }
+        if !wantHidden && !window.isVisible { window.orderFrontRegardless() }
 
         view.t += 1.0 / 10.0
         view.animate = FileManager.default.fileExists(
@@ -1218,6 +1241,14 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         case .discard:
             if case .paused = phase { clearSession(); phase = .idle }
 
+        case .hide:
+            // Out of sight, still running — a countdown in flight keeps counting.
+            FileManager.default.createFile(atPath: root + "/hidden", contents: nil)
+            window.orderOut(nil)
+
+        case .quitApp:
+            NSApp.terminate(nil)
+
         case .collapse:
             view.collapsed = true
             FileManager.default.createFile(atPath: root + "/collapsed", contents: nil)
@@ -1247,6 +1278,8 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         phase = .finished(s)
         clearSession()
         NSSound(named: NSSound.Name("Glass"))?.play()
+        // Surfaces itself even if you hid it — this is the moment worth seeing.
+        try? FileManager.default.removeItem(atPath: root + "/hidden")
         window.orderFrontRegardless()
     }
 

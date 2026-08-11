@@ -77,6 +77,7 @@ launchctl load ~/Library/LaunchAgents/com.clawd.study.plist
 
 ```
 clawd.sh start | stop | restart | toggle
+clawd.sh hide | show         藏起来 / 拿回来（进程不退，计时继续走）
 clawd.sh motion [on|off]     动画开关（同时管两只）
 clawd.sh prop [laptop|whip|none]  伴学时 Clawd 手上拿什么
 clawd.sh scene [on|off]      书桌场景（台灯/书堆/绿植）
@@ -87,7 +88,9 @@ clawd.sh today               今天的原始 JSON
 clawd.sh build               改完源码重新编译
 ```
 
-面板本身：拖标题栏移动，点右上角 `—` 收起成贴纸大小，**双击贴纸**展开（单击是拖动，所以挪位置不会误触）。
+面板本身：拖标题栏移动，点右上角 `—` 收起成贴纸大小，**双击贴纸**展开（单击是拖动，所以挪位置不会误触）。**右键**弹菜单：隐藏 / 收起 / 退出。
+
+「隐藏」和「收起」不一样：收起是变成小贴纸还在桌面上，隐藏是整个看不见但进程还在、计时照样走。计时到点它会自己冒出来告诉你，不会藏着把这段白计了。
 
 收起后照样会做那些小动作，杯子、Zzz、感叹号会挪到身侧以免出界。
 

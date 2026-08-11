@@ -51,6 +51,16 @@ case "${1:-start}" in
       *) echo "当前：$(cat "$F" 2>/dev/null || echo laptop)   可选 laptop | whip | none" ;;
     esac ;;
 
+  hide)
+    mkdir -p "$DIR"; : > "$DIR/hidden"
+    if ! pgrep -qx clawd 2>/dev/null; then nohup "$DIR/clawd" >/dev/null 2>&1 & fi
+    echo "藏起来了（进程还在，计时继续走）" ;;
+
+  show)
+    rm -f "$DIR/hidden"
+    if ! pgrep -qx clawd 2>/dev/null; then nohup "$DIR/clawd" >/dev/null 2>&1 & fi
+    echo "回来了" ;;
+
   scene)
     # 书桌场景（台灯 / 书堆 / 绿植），纯静态
     F="$DIR/no-scene"
@@ -77,5 +87,5 @@ case "${1:-start}" in
       && echo "编译好了，跑 clawd.sh restart 生效" ;;
 
   *)
-    echo "用法: clawd.sh start|stop|restart|toggle|motion [on|off]|prop [laptop|whip|none]|scene [on|off]|find|today|summary|build"; exit 1 ;;
+    echo "用法: clawd.sh start|stop|restart|toggle|hide|show|motion [on|off]|prop [laptop|whip|none]|scene [on|off]|find|today|summary|build"; exit 1 ;;
 esac
