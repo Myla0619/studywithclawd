@@ -12,12 +12,25 @@ HSL 里明度越接近白，能达到的彩度上限越低，所以「又亮又�
 **Clawd 会跟着当前状态换动作**：睡觉闭眼冒 Zzz、科研抱电脑、学习抱书、吃饭端碗、
 通勤背包、运动举哑铃、休息端杯子、刷手机低头看屏幕、上课举手。它自己的橙色（`#E88E68`）不变，换的是姿势和道具。想换深浅改 `drawClawd` 里的 `HEX` 一处即可。圆盘和小组件共用同一份绘制代码，所以小组件上同步能看到。
 
+界面在 WebView 里，是真的 HTML/CSS——卡片、字体层次、iOS 那种分段控件、底部 tab、
+从下面滑上来的详情页。之前用 Scriptable 的 `UITable` 做，那玩意儿只能一行一行摆文字，
+再怎么调都是系统设置页的长相。
+
 ```
-MylaDayCore.js    数据 + 圆盘绘制 + Clawd（两个脚本共用，只有一份实现）
-MylaDay.js        主脚本：圆盘、切状态、看时段、周月总结、拆分、提醒设置
+MylaDayCore.js    数据读写 + 圆盘/占比环绘制 + Clawd（脚本和小组件共用，只有一份实现）
+MylaDayHTML.js    视图层，纯 HTML/CSS，一行业务逻辑都没有
+MylaDay.js        控制器：payload 组装 + 跟 WebView 的消息循环 + 图表
 MylaDayWidget.js  主屏小组件
-install.js        引导脚本，把上面三个拉下来；以后更新也跑它
+Check.js          「装了没变化」的时候跑它，看手机上的实际状态
+install.js        引导脚本，把上面这些拉下来；以后更新也跑它
 ```
+
+**图不在页面里画**。圆盘、堆叠柱、占比环都还是脚本那边用 `DrawContext` 画好、
+转成 base64 塞进 `<img>`。这样绘制代码仍然只有 `MylaDayCore` 一份，
+小组件和 app 里看到的是同一个圆盘，不会两边画得不一样。
+
+页面和脚本之间：脚本跑 `window.__wait(completion)` 等一条消息，页面点一下就发一条，
+没人等的时候先排队所以不会丢。脚本改完数据存盘，再 `render(payload)` 重画。
 
 ## 三个页面
 
@@ -58,7 +71,16 @@ install.js        引导脚本，把上面三个拉下来；以后更新也跑�
 
 （不想粘的话，AirDrop 过去 `.js` 文件、在分享菜单里选 Scriptable 也行，但这条我没法替你验证。）
 
-**3. 加小组件**：长按主屏 → ＋ → Scriptable → 选小号或中号 → 编辑小组件 → Script 选 `MylaDayWidget`。
+**3. 放个主屏幕图标**（不用每次先开 Scriptable）：
+
+1. 「快捷指令」→ ＋ → 搜 **打开 URL**
+2. 填 `scriptable:///run?scriptName=MylaDay`
+3. 快捷指令命名为 **Myla 的一天** → 保存
+4. 在快捷指令列表里长按它 → **分享** → **添加到主屏幕** → 点图标换成下面那张 Clawd 图
+
+`icon.png` 在这个目录里，先存到相册。
+
+**4. 加小组件**：长按主屏 → ＋ → Scriptable → 选小号或中号 → 编辑小组件 → Script 选 `MylaDayWidget`。
 
 数据存在 Scriptable 自己的目录里（`myladay.json`），主脚本和小组件读同一个文件，**所以没有原生版那个 App Groups 的坑**。
 

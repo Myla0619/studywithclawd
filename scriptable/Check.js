@@ -35,8 +35,7 @@ for (const [label, f, d] of dirs) {
       if (m) info += " · 版本 " + m[1]
       // 认得出新旧的特征：统计页和清单是这一版才有的
       if (n === "MylaDay.js") {
-        info += txt.indexOf("showStats") >= 0 ? " · 有统计页" : " · 没有统计页（旧的）"
-        info += txt.indexOf("addTodos") >= 0 ? " · 有清单" : " · 没有清单（旧的）"
+        info += txt.indexOf("new WebView") >= 0 ? " · WebView 版" : " · 老的 UITable 版"
       }
       if (n === "MylaDayCore.js") {
         info += txt.indexOf("drawDonut") >= 0 ? " · 有占比圆盘" : " · 没有占比圆盘（旧的）"
@@ -45,6 +44,9 @@ for (const [label, f, d] of dirs) {
     say(n, info)
   }
 
+  if (js.indexOf("MylaDayHTML.js") < 0 && js.indexOf("MylaDay.js") >= 0) {
+    say("⚠️ 少了 MylaDayHTML.js", "界面在这个文件里，缺了打不开。重跑一次 install")
+  }
   const json = names.filter(n => n.indexOf("myladay") === 0)
   say("记录文件", json.length ? json.join("、") : "（还没有）")
 }
