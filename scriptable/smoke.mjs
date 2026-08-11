@@ -94,9 +94,10 @@ function makePageReal(wv) {
     }
   }
   const fn = new Function("window", "document", "location", "localStorage", "setTimeout", "Math",
-    js + "\nreturn { boot: window.boot, log: log, LOG: LOG, els: arguments[1] }")
+    js + "\nreturn { boot: window.boot, log: log, LOG: LOG, cdSave: cdSave, S: S }")
   const api = fn(window, document, location, window.localStorage, f => f(), Math)
   api.els = els
+  api.doc = document
   return api
 }
 
@@ -330,6 +331,25 @@ if (only.indexOf("学习") < 0 || onlyTodo === "空") {
   process.exit(1)
 }
 console.log("     ✓ 只靠这一条也存住了")
+
+// ⑥ 倒数日：走页面里真实的 cdSave()
+disk = {}; store = {}
+await runMyla("⑥ 网页里记一个倒数日", {
+  actions: page => {
+    page.doc.getElementById("cdName").value = "论文 deadline"
+    page.doc.getElementById("cdDate").value = "2026-08-30"
+    // 真实调用页面的保存函数（它内部会 log + flush）
+    page.cdSave()
+  }
+})
+d = C.load()
+console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name + " " + c.date).join("、") || "空"))
+if (!(d.countdowns || []).length) {
+  console.log("     ❌ 倒数日没存下来")
+  if (d.lastChannelError) console.log("     通道报的错：" + d.lastChannelError)
+  process.exit(1)
+}
+console.log("     ✓ 存住了")
 
 console.log("\n弹过的窗：" + (alerts.filter(Boolean).join(" / ") || "（没有）"))
 console.log("\n全部跑通 ✅")

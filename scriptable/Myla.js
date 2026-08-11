@@ -276,7 +276,7 @@ async function runApp() {
         appliedUpTo = m.i + 1
         markDone(m.sid || SID, m.i)
         if (m.t === "export") wantExport = true
-        else if (m.t !== "update") { apply(m); n++ }
+        else if (m.t !== "update" && applySafe(m)) n++
       }
       if (n) persist("实时拦截")
     } catch (e) {
@@ -301,7 +301,7 @@ async function runApp() {
       appliedUpTo = m.i + 1
       markDone(m.sid || SID, m.i)
       if (m.t === "export") wantExport = true
-      else if (m.t !== "update") { apply(m); n++ }
+      else if (m.t !== "update" && applySafe(m)) n++
     }
     if (n) persist("轮询/兜底")
     return n
@@ -446,6 +446,16 @@ async function toast(title, msg) {
 
 // ---------------------------------------------------------------- 回放
 
+/** 每条操作单独兜住。原来一批里只要有一条抛异常，整批都不落盘——
+ *  倒数日存不住而切状态存得住，最像这种「一条毒死一批」的情况。 */
+function applySafe(m) {
+  try { apply(m); return true }
+  catch (e) {
+    data.lastApplyError = m.t + "：" + ((e && e.message) || String(e)).slice(0, 100)
+    return false
+  }
+}
+
 function apply(m) {
   const key = C.dayKey(new Date(m.at))
   const todos = data.todos[key] || (data.todos[key] = [])
@@ -572,7 +582,7 @@ async function drainPending() {
       if (!m.sid || m.i === undefined || m.i <= doneUpTo(m.sid)) continue
       markDone(m.sid, m.i)
       if (m.t === "export" || m.t === "update") continue
-      apply(m); n++
+      if (applySafe(m)) n++
     }
     if (n) persist("localStorage 捞回来的")
     await probe.evaluateJavaScript("localStorage.removeItem('myla_pending')")

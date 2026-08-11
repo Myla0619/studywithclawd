@@ -57,6 +57,15 @@ if (!sids.length) {
   }
 }
 if (data.pendingUpdate) say("下好了还没生效的版本", data.pendingUpdate)
+if (data.lastChannelError) say("⚠️ 通道最近报的错", data.lastChannelError)
+if (data.lastApplyError) say("⚠️ 最近有一条操作没执行成", data.lastApplyError)
+
+// ---- 倒数日：文件里到底有没有
+const cds = data.countdowns || []
+say("倒数日", cds.length ? cds.length + " 个" : "文件里一个都没有")
+for (const c of cds) {
+  say("  " + c.name, c.date + (c.yearly ? " · 每年" : "") + " · " + (c.hex || "没颜色"))
+}
 
 // ---- 最近三天的每一段
 for (let back = 0; back < 3; back++) {
