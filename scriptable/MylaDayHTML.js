@@ -773,6 +773,13 @@ function wantExport() {
     + '所以得等这个窗口关掉。往下滑关掉就行。</div>'
   draw()
 }
+function wantUpdate() {
+  log("update")
+  S.sheet = '<h3>关掉窗口就去查</h3>'
+    + '<div class="tip">有新版会自动下好，再打开一次就是新的。'
+    + '平时也会每小时自己查一次，一般不用点这里。</div>'
+  draw()
+}
 function alertSaved(msg) {
   S.sheet = '<h3>' + esc(msg) + '</h3><div class="tip">改动在关掉窗口时存盘。</div>'
   draw()

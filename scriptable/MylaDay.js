@@ -22,6 +22,10 @@ const V = importModule("MylaDayHTML")
 
 const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
 
+const REPO = "Myla0619/studywithclawd"
+const UPDATE_FILES = ["MylaDayCore.js", "MylaDayHTML.js", "MylaDay.js",
+                      "MylaDayWidget.js", "Check.js", "WebTest.js", "Why.js"]
+
 // ---------------------------------------------------------------- 入口
 
 let data = C.rollover(C.load())
@@ -106,6 +110,91 @@ async function runApp() {
   if (wantExport) {
     try { await DocumentPicker.exportFile(C.DATA) } catch (e) { /* 取消了 */ }
   }
+
+  // 更新放在关掉窗口之后：一点都不占打开 app 的时间，下次打开就是新的
+  await selfUpdate(log.some(m => m.t === "update"))
+}
+
+/**
+ * 自己更新自己。放在这里是为了让「跑 install → 划后台 → 再跑」这套动作彻底消失。
+ *
+ * 下载钉在一个具体 commit 上：用分支名时 jsDelivr 的缓存能陈到几小时前，
+ * 只要 GitHub 那边超时一次回落过去，就会静默装回一份旧代码。
+ *
+ * 正在跑的这一份代码已经在内存里了，覆盖文件不影响当前这次运行，下次打开才生效。
+ */
+async function selfUpdate(force) {
+  const now = Date.now()
+  if (!force && data.lastCheck && now - data.lastCheck < 3600000) return
+  data.lastCheck = now
+
+  let sha = null
+  try {
+    const r = new Request("https://api.github.com/repos/" + REPO + "/commits/main")
+    r.headers = { "User-Agent": "MylaDay" }      // 不带 UA 直接 403
+    r.timeoutInterval = 12
+    sha = (await r.loadJSON()).sha
+  } catch (e) {
+    C.save(data)
+    if (force) await toast("没连上 GitHub", e.message)
+    return
+  }
+
+  if (sha === data.installedSha) {
+    C.save(data)
+    if (force) await toast("已经是最新的了", "版本 " + C.VERSION)
+    return
+  }
+
+  const here = module.filename
+  const dir = here.slice(0, here.lastIndexOf("/"))
+  const inICloud = dir.indexOf("Mobile Documents") >= 0 || dir.indexOf("iCloud") >= 0
+  const fm = inICloud ? FileManager.iCloud() : FileManager.local()
+  const base = "https://raw.githubusercontent.com/" + REPO + "/" + sha + "/scriptable/"
+
+  let ok = 0
+  const failed = []
+  for (const name of UPDATE_FILES) {
+    try {
+      const req = new Request(base + name)
+      req.timeoutInterval = 20
+      const code = await req.loadString()
+      if (!code || code.length < 400) throw new Error("内容太短")
+      fm.writeString(fm.joinPath(dir, name), code)   // 只写脚本，myladay*.json 一律不碰
+      ok++
+    } catch (e) { failed.push(name) }
+  }
+
+  if (failed.length) {
+    // 没下全就不记 sha，下次还会再试；已经写下去的那些下次会被同一个 commit 覆盖一遍
+    C.save(data)
+    if (force) await toast("没下全", failed.join("、") + " 没下来，下次再试")
+    return
+  }
+
+  data.installedSha = sha
+  C.save(data)
+
+  let to = "?"
+  try {
+    const m = fm.readString(fm.joinPath(dir, "MylaDayCore.js")).match(/const VERSION = "([^"]*)"/)
+    if (m) to = m[1]
+  } catch (e) {}
+
+  const a = new Alert()
+  a.title = "有新版了"
+  a.message = C.VERSION + "  →  " + to
+    + "\n\n已经下好了。再打开一次就是新的。\n（你的记录没有被动过）"
+  a.addAction("好")
+  await a.present()
+}
+
+async function toast(title, msg) {
+  const a = new Alert()
+  a.title = title
+  if (msg) a.message = msg
+  a.addAction("好")
+  await a.present()
 }
 
 // ---------------------------------------------------------------- 回放
