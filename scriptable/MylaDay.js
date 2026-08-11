@@ -145,6 +145,7 @@ async function refresh(table) {
   addAction(table, `提醒：每 ${nudgeMinutes()} 分钟问一次`, async () => {
     await setNudge(); await refresh(table); table.reload()
   })
+  addNote(table, "版本 " + C.VERSION)
   addAction(table, "导出一份备份", async () => {
     // 存到「文件」里，换手机或者我改坏了都能拿回来
     try { await DocumentPicker.exportFile(C.DATA) }

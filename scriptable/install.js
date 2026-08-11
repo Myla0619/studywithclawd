@@ -23,7 +23,7 @@ for (const name of FILES) {
   let saved = false
   for (const [label, base] of SOURCES) {
     try {
-      const req = new Request(base + name)
+      const req = new Request(base + name + "?t=" + Date.now())
       req.timeoutInterval = 20
       const code = await req.loadString()
       if (!code || code.length < 400) throw new Error("内容太短")
@@ -41,13 +41,21 @@ for (const name of FILES) {
 }
 
 // 只覆盖上面列的那几个脚本名，数据文件（myladay*.json）一律不碰
+// 回读核对：装完之后手机上实际是哪一版
+let installed = "读不到"
+try {
+  const core = fm.readString(fm.joinPath(dir, "MylaDayCore.js"))
+  const m = core.match(/const VERSION = "([^"]*)"/)
+  if (m) installed = m[1]
+} catch (e) {}
+
 const listed = fm.listContents(dir).filter(f => f.endsWith(".js"))
 const dataDir = FileManager.local().documentsDirectory()
 const dataFiles = FileManager.local().listContents(dataDir)
   .filter(f => f.indexOf("myladay") === 0)
 
 const a = new Alert()
-a.title = failed ? `有 ${failed} 个没装上` : "装好了"
+a.title = failed ? `有 ${failed} 个没装上` : "装好了 · " + installed
 a.message = log.join("\n")
   + "\n\n装到了：" + (inICloud ? "iCloud" : "本机") + "脚本目录"
   + "\n" + dir

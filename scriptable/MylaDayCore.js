@@ -7,6 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
+const VERSION = "20260811-2030"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
@@ -493,7 +494,7 @@ function shadeHex(hex) {
 }
 
 module.exports = {
-  DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
+  VERSION, DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
   switchTo, splitSegment, duration, totals, hhmm, clock, activityOf,
   drawDial, drawClawd, DEFAULT_ACTIVITIES, DATA
 }
