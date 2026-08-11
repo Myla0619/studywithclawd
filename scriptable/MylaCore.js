@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-0229"
+const VERSION = "20260812-0234"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
@@ -70,7 +70,8 @@ function migrate(d) {
   if (!d.days) d.days = {}
   if (!d.todos) d.todos = {}          // { "2026-08-11": [{id, text, done, doneAt}] }
   if (!d.countdowns) d.countdowns = [] // [{id, name, date:"2026-12-25", yearly, hex}]
-  if (d.autoGrace === undefined) d.autoGrace = 30   // 自动切换多久内不许覆盖手动的；0=不保护，-1=完全拒绝
+  if (d.autoGrace === undefined) d.autoGrace = 30
+  if (!d.applied) d.applied = {}      // { 会话号: 已执行到第几条 }，跨会话去重用   // 自动切换多久内不许覆盖手动的；0=不保护，-1=完全拒绝
   if (!d.ui) d.ui = { span: 7, chart: "bar" }
   d.v = SCHEMA
   return d

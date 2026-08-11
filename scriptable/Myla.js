@@ -66,11 +66,36 @@ Script.complete()
 
 // ---------------------------------------------------------------- 开窗口
 
+/** 这一次运行的编号。操作按「会话号 + 序号」去重，跨会话也不会重复执行。 */
+const SID = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+
+/** 这个会话已经执行到第几条了（-1 表示一条都没执行过）。 */
+function doneUpTo(sid) {
+  const a = data.applied || (data.applied = {})
+  return a[sid] === undefined ? -1 : a[sid]
+}
+function markDone(sid, i) {
+  const a = data.applied || (data.applied = {})
+  if (a[sid] === undefined || i > a[sid]) a[sid] = i
+  // 只留最近几次运行的记录，别让它无限长
+  const keys = Object.keys(a)
+  if (keys.length > 8) for (const k of keys.sort().slice(0, keys.length - 8)) delete a[k]
+}
+
 async function runApp() {
+  // 开窗口之前先把上次残留的操作捞回来。
+  // 这条是为「上划把 app 杀掉」准备的：那种退出方式下，页面到脚本的实时通道
+  // 全都来不及跑，但浏览器自己的存储还在。用一个空页面去读，因为同一个 app
+  // 里的 WebView 共用一份存储。
+  await drainPending()
+
   const wv = new WebView()
   const json = JSON.stringify(payload())
     .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")
-  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ")</" + "script>")
+  // baseURL 是为了让 localStorage 可用——loadHTML 不给 baseURL 的话页面没有源，
+  // localStorage 会直接抛异常。这个域不会真的去访问。
+  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ", true)</" + "script>",
+                    "https://myla.local/")
 
   // 存盘一共四条通道，因为其中没有一条我能在电脑上验证。任意一条通一次，
   // 所有操作就都在——页面每次发的是「到目前为止的全部操作」，不是单条，
@@ -96,6 +121,7 @@ async function runApp() {
       for (const m of batch) {
         if (m.i < appliedUpTo) continue
         appliedUpTo = m.i + 1
+        markDone(m.sid || SID, m.i)
         if (m.t === "export") wantExport = true
         else if (m.t !== "update") { apply(m); n++ }
       }
@@ -116,12 +142,16 @@ async function runApp() {
     for (const m of batch) {
       if (m.i === undefined || m.i < appliedUpTo) continue
       appliedUpTo = m.i + 1
+      markDone(m.sid || SID, m.i)
       if (m.t === "export") wantExport = true
       else if (m.t !== "update") { apply(m); n++ }
     }
     if (n) C.save(data)
     return n
   }
+  // 落盘之后把页面那份残留清掉，不然下次启动会再捞一遍
+  const clearPending = () => wv.evaluateJavaScript(
+    "localStorage.removeItem('myla_pending')").catch(() => {})
 
   while (!done) {
     const r = await Promise.race([
@@ -143,6 +173,7 @@ async function runApp() {
   } catch (e) { /* 读不到就算了，前面几条多半已经存过 */ }
 
   take(log)
+  await clearPending()
   scheduleNudge()
 
   // 系统的文件选择器盖不到 WebView 上面，所以导出只能等窗口关掉再弹
@@ -332,6 +363,27 @@ function uid() { return Math.random().toString(36).slice(2, 10) }
 
 function sleep(ms) { return new Promise(r => Timer.schedule(ms, false, r)) }
 
+/** 把上次留在浏览器存储里、还没落盘的操作捞出来执行掉。 */
+async function drainPending() {
+  try {
+    const probe = new WebView()
+    await probe.loadHTML("<html></html>", "https://myla.local/")
+    const raw = await probe.evaluateJavaScript("localStorage.getItem('myla_pending')")
+    if (!raw) return
+    const batch = JSON.parse(raw)
+    let n = 0
+    for (const m of batch) {
+      // 实时通道可能已经存过了但没来得及清这份残留，按会话号 + 序号跳过
+      if (!m.sid || m.i === undefined || m.i <= doneUpTo(m.sid)) continue
+      markDone(m.sid, m.i)
+      if (m.t === "export" || m.t === "update") continue
+      apply(m); n++
+    }
+    if (n) C.save(data)
+    await probe.evaluateJavaScript("localStorage.removeItem('myla_pending')")
+  } catch (e) { /* 这条也不通就算了，还有另外四条 */ }
+}
+
 // ---------------------------------------------------------------- 数据
 
 function png(img) { return "data:image/png;base64," + Data.fromPNG(img).toBase64String() }
@@ -372,6 +424,7 @@ function payload() {
 
   return {
     version: C.VERSION,
+    sid: SID,
     pending: (data.pendingUpdate && data.pendingUpdate > C.VERSION) ? data.pendingUpdate : null,
     sub: `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`,
     warn: data.loadFailed

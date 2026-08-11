@@ -186,14 +186,16 @@ var SEQ = 0
 // 每条操作立刻推给脚本存盘。走的是「页面发起跳转、脚本在 shouldAllowRequest 里拦下来」
 // 这条道——WebView 弹出来之后，这是唯一能实时把东西送出去的通道。
 // 关窗口时脚本还会再读一遍 LOG 兜底，两边都按 i 去重，不会重复执行。
-// 网页调试时（http/https）不走这条，不然浏览器会真的去导航。
-var URLCHAN = location.protocol !== "http:" && location.protocol !== "https:"
+// 由 boot 的第二个参数决定：在 Scriptable 里才发跳转，网页调试时不发
+// （不然浏览器会真的去导航）。不能再靠协议判断——页面现在带 https 的 baseURL，
+// 那是为了让 localStorage 可用。
+var URLCHAN = false
 
 var SPANS = [["周", 7], ["月", 30], ["3个月", 90]]
 var CHARTS = [["柱状", "bar"], ["圆盘", "dial"]]
 
 function log(t, v, v2) {
-  LOG.push({ i: SEQ++, t: t, v: v, v2: v2, at: Date.now() })
+  LOG.push({ i: SEQ++, sid: P.sid, t: t, v: v, v2: v2, at: Date.now() })
   flush()
 }
 
@@ -207,7 +209,11 @@ function log(t, v, v2) {
  * 不能假设它每次都通。
  */
 function flush() {
-  if (!URLCHAN || !LOG.length) return
+  if (!LOG.length) return
+  // 第五条通道，也是唯一扛得住「上划把 app 杀掉」的：写进浏览器自己的存储，
+  // 下次启动时脚本在开窗口之前把它捞出来。不需要任何页面到脚本的实时通道。
+  try { localStorage.setItem("myla_pending", JSON.stringify(LOG.slice(-400))) } catch (e) {}
+  if (!URLCHAN) return
   try {
     var recent = LOG.slice(-200)            // URL 不能无限长，留最近 200 条
     location.href = "myladay://save?m=" + encodeURIComponent(JSON.stringify(recent))
@@ -250,7 +256,8 @@ function todayTotals() {
   return t
 }
 
-window.boot = function (payload) {
+window.boot = function (payload, inApp) {
+  URLCHAN = !!inApp
   P = payload
   S.span = P.span; S.chart = P.chart
   document.getElementById("sub").textContent = P.sub
