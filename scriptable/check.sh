@@ -53,7 +53,7 @@ else
 fi
 
 echo "── 模板字符串会吞掉的单反斜杠转义（\\d 写成 \\\\d 才对）"
-if grep -n '\\[dswDSWb]' MylaView.js | grep -v '\\\\[dswDSWb]' ; then
+if grep -n '\\[dswDSWbnr+*.?()|[]' MylaView.js | grep -v '\\\\[dswDSWbnr+*.?()|[]' ; then
   echo "  ✗ 上面这些是单反斜杠，模板字符串会把它变成普通字母，正则就废了"
   fail=1
 else

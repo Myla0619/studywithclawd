@@ -216,7 +216,14 @@ function flush() {
   if (!URLCHAN) return
   try {
     var recent = LOG.slice(-200)            // URL 不能无限长，留最近 200 条
-    location.href = "myladay://save?m=" + encodeURIComponent(JSON.stringify(recent))
+    // 用 base64 而不是 encodeURIComponent：JSON 里的 {}"[] 被系统再编码一层的话，
+    // 脚本那边解一次还剩 %7B，JSON.parse 当场失败，数据就静默没了。
+    var json = JSON.stringify(recent)
+    // 用 split/join 不用正则：模板字符串会把 \\+ 这种转义吞掉一层，
+    // 写出来就成了 /+/g，非法正则，整个页面当场挂掉
+    var b64 = btoa(unescape(encodeURIComponent(json)))
+      .split("+").join("-").split("/").join("_").split("=").join("")
+    location.href = "myladay://save?m=" + b64
   } catch (e) {}
 }
 

@@ -104,10 +104,10 @@ async function runApp() {
   const wv = new WebView()
   const json = JSON.stringify(payload())
     .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")
-  // baseURL 是为了让 localStorage 可用——loadHTML 不给 baseURL 的话页面没有源，
-  // localStorage 会直接抛异常。这个域不会真的去访问。
-  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ", true)</" + "script>",
-                    "https://myla.local/")
+  // 不给 baseURL。之前为了让 localStorage 可用加过 https://myla.local/，
+  // 但从 https 源跳到自定义协议会被 WKWebView 拦掉，等于把最要紧的那条通道弄坏了。
+  // 体检脚本的页面没有 baseURL，跳转是通的——通道比 localStorage 重要。
+  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ", true)</" + "script>")
 
   // 存盘一共四条通道，因为其中没有一条我能在电脑上验证。任意一条通一次，
   // 所有操作就都在——页面每次发的是「到目前为止的全部操作」，不是单条，
@@ -128,7 +128,7 @@ async function runApp() {
     try {
       // 收到的是「到目前为止的全部操作」，按序号只取没执行过的那些。
       // 所以中途丢几条消息不要紧，后一条会把前面的一起带过来。
-      const batch = JSON.parse(decodeURIComponent(u.slice(u.indexOf("m=") + 2)))
+      const batch = JSON.parse(decodePayload(u.slice(u.indexOf("m=") + 2)))
       let n = 0
       for (const m of batch) {
         if (m.i < appliedUpTo) continue
@@ -138,7 +138,11 @@ async function runApp() {
         else if (m.t !== "update") { apply(m); n++ }
       }
       if (n) persist("实时拦截")
-    } catch (e) { /* 收不下就等关窗口时的兜底 */ }
+    } catch (e) {
+      // 留个痕，不然这条通道再出问题又是静默的，MylaWhy 里能看到
+      data.lastChannelError = (e && e.message ? e.message : String(e)).slice(0, 120)
+      try { C.save(data) } catch (e2) {}
+    }
     return false
   }
 
@@ -392,11 +396,31 @@ function uid() { return Math.random().toString(36).slice(2, 10) }
 
 function sleep(ms) { return new Promise(r => Timer.schedule(ms, false, r)) }
 
+/**
+ * 页面发过来的那串。用 base64 是因为 JSON 里的 {}"[] 一旦被系统二次百分号编码，
+ * decodeURIComponent 解一次就还剩 %7B 这种，JSON.parse 当场炸在 catch 里，
+ * 数据静默丢掉而且什么都看不见。base64 的字符集不会被再编码一次。
+ * 解不动就退回老办法，兼容旧页面。
+ */
+function decodePayload(raw) {
+  try {
+    const b64 = raw.replace(/-/g, "+").replace(/_/g, "/")
+    const t = Data.fromBase64String(b64).toRawString()
+    if (t && t.charAt(0) === "[") return t
+  } catch (e) { /* 不是 base64，往下走 */ }
+  let t = raw
+  for (let i = 0; i < 3; i++) {          // 可能被编码了不止一层
+    if (t.charAt(0) === "[") return t
+    try { t = decodeURIComponent(t) } catch (e) { break }
+  }
+  return t
+}
+
 /** 把上次留在浏览器存储里、还没落盘的操作捞出来执行掉。 */
 async function drainPending() {
   try {
     const probe = new WebView()
-    await probe.loadHTML("<html></html>", "https://myla.local/")
+    await probe.loadHTML("<html></html>")
     const raw = await probe.evaluateJavaScript("localStorage.getItem('myla_pending')")
     if (!raw) return
     const batch = JSON.parse(raw)

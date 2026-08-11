@@ -33,7 +33,17 @@ class DrawContext {
   fillRect() {} fillEllipse() {} addPath() {} fillPath() {} strokePath() {} drawTextInRect() {}
   getImage() { return { __img: true } }
 }
-const Data = { fromPNG: () => ({ toBase64String: () => "PNGSTUB" }) }
+const Data = {
+  fromPNG: () => ({ toBase64String: () => "PNGSTUB" }),
+  fromBase64String: b64 => {
+    const buf = Buffer.from(b64, "base64")
+    // Scriptable 遇到非法 base64 会抛，这里也得抛，不然测不出真实行为
+    if (buf.toString("base64").replace(/=+$/, "") !== b64.replace(/=+$/, "")) {
+      throw new Error("不是合法的 base64")
+    }
+    return { toRawString: () => buf.toString("utf8") }
+  }
+}
 const FileManager = {
   local: () => FM, iCloud: () => FM
 }
@@ -132,9 +142,16 @@ class WebView {
     }
   }
   async evaluateJavaScript(js) {
-    if (js.indexOf("localStorage.getItem") >= 0) return store["myla_pending"] || null
+    if (js.indexOf("localStorage.getItem") >= 0) {
+      if (SCENARIO.noStorage) return null
+      return store["myla_pending"] || null
+    }
     if (js.indexOf("localStorage.removeItem") >= 0) { delete store["myla_pending"]; return null }
-    if (js.indexOf("window.LOG") >= 0) return JSON.stringify(page ? page.LOG : [])
+    if (js.indexOf("window.LOG") >= 0) {
+      // 模拟「evaluateJavaScript 对已弹出的窗口不工作」：第②④条通道等于没有
+      if (SCENARIO.noEval) throw new Error("这台机器上读不了")
+      return JSON.stringify(page ? page.LOG : [])
+    }
     return null
   }
   async present() {
@@ -248,6 +265,20 @@ await runMyla("④ 紧接着再打开一次", {})
 d = C.load()
 console.log("     → 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空")
   + "（不该变多）")
+
+// ⑤ 最关键的一种：只有实时拦截那条通道能用（第②④条不工作、localStorage 也没有）。
+// 用户的情况就是这样——他上划退出，关窗口后的通道根本跑不到。
+disk = {}; store = {}
+await runMyla("⑤ 只有实时拦截那条通道", { actions: actionsIn(), noEval: true, noStorage: true })
+d = C.load()
+const only = (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
+const onlyTodo = (d.todos[tk] || []).map(x => x.text).join("、") || "空"
+console.log("     → 段：" + only + " ｜ 清单：" + onlyTodo)
+if (only.indexOf("学习") < 0 || onlyTodo === "空") {
+  console.log("     ❌ 只靠实时通道存不下来")
+  process.exit(1)
+}
+console.log("     ✓ 只靠这一条也存住了")
 
 console.log("\n弹过的窗：" + (alerts.filter(Boolean).join(" / ") || "（没有）"))
 console.log("\n全部跑通 ✅")
