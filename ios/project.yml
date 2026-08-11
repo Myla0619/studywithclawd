@@ -25,6 +25,8 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "用来判断你到了哪个地点，好自动切换当前状态。"
+        INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: "选「始终允许」，app 没打开的时候到了实验室或者回到家也能自动切换状态；位置只留在你手机上。"
 
   ClawdDayWidgetExtension:
     type: app-extension

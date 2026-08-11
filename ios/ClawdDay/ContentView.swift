@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var editing = false
     @State private var detail: Activity? = nil
     @State private var showSummary = false
+    @State private var showPlaces = false
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -34,9 +35,19 @@ struct ContentView: View {
                         .padding(.horizontal, 28)
                         .padding(.top, 8)
 
-                    Text("今天已记录 \(hhmm(accounted))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    VStack(spacing: 3) {
+                        Text("今天已记录 \(hhmm(accounted))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        // Say when a switch was not yours, so the dial is never
+                        // silently wrong about why a block is there.
+                        if let a = Store.lastAutoSwitch,
+                           Date().timeIntervalSince(a.at) < 3600 {
+                            Text("刚才\(a.reason)，自动切的")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
 
                     switcher
 
@@ -53,7 +64,14 @@ struct ContentView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+                    Menu {
+                        Button { showPlaces = true } label: {
+                            Label("地点自动切换", systemImage: "mappin.and.ellipse")
+                        }
+                        Button { editing = true } label: {
+                            Label("状态列表", systemImage: "slider.horizontal.3")
+                        }
+                    } label: { Image(systemName: "ellipsis.circle") }
                 }
             }
             .sheet(isPresented: $editing) {
@@ -64,6 +82,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showSummary) {
                 SpanSummary(activities: activities, now: now)
+            }
+            .sheet(isPresented: $showPlaces) {
+                PlacesView(activities: $activities) { reload() }
             }
         }
         .onReceive(tick) { now = $0 }
@@ -89,6 +110,7 @@ struct ContentView: View {
                         // Switching is the only write: it closes the old segment
                         // and opens the new one at this instant.
                         Store.switchTo(a.id)
+                        Nudge.reschedule()          // push the check-in back
                         reload()
                     } label: {
                         HStack(spacing: 8) {
