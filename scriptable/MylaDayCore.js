@@ -210,7 +210,7 @@ function drawDial(data, segs, size, opts) {
 
   const open = openSegment(segs)
   const cur = open ? activityOf(data, open.a) : null
-  drawClawd(ctx, cx, cy + size * 0.010, size * 0.0042, cur ? cur.hex : "#EEBC96")
+  drawClawd(ctx, cx, cy + size * 0.010, size * 0.0042, cur ? cur.id : null)
 
   if (cur) {
     ctx.setTextAlignedCenter()
@@ -238,38 +238,78 @@ function fatLine(ctx, x0, y0, x1, y1, w, color) {
   }
 }
 
-/** 圆滚滚那只 Clawd。几何跟 iOS 的 ClawdDrawn.swift 一致，k 是缩放。 */
-function drawClawd(ctx, cx, baseY, k, hex) {
-  const body = new Color(hex)
-  const shade = new Color(hex, 1)
+/**
+ * 圆滚滚那只 Clawd。k 是缩放，act 是当前状态 id —— 不同状态给不同动作。
+ * 颜色固定用 Clawd 自己的橙，不跟着状态变。
+ */
+function drawClawd(ctx, cx, baseY, k, act) {
+  const HEX = "#D06749"
+  const SH = shadeHex(HEX)
   const cream = "#FFFAF4", ink = "#5A4A44"
-  // y 往下为正，所以模型里的 +y 要减
   const X = x => cx + x * k
   const Y = y => baseY - y * k
   const R = (x, y, w, h) => new Rect(X(x), Y(y + h), w * k, h * k)
+  const fill = c => ctx.setFillColor(new Color(c))
+  const poly = (pts, c) => {
+    const q = new Path(); q.addLines(pts); q.closeSubpath()
+    ctx.addPath(q); fill(c); ctx.fillPath()
+  }
+
+  // 每个状态：手的位置、脚要不要错开、眼睛怎么画、附带什么道具
+  let handL = [-31, 14], handR = [31, 14]
+  let stride = 0                      // 走路时两脚错开
+  let eyes = "open"
+  const props = []                    // 画在身体之后
+
+  switch (act) {
+    case "sleep":
+      eyes = "shut"; handL = [-30, 10]; handR = [30, 10]
+      props.push("zzz"); break
+    case "class":
+      handR = [30, 46]; break                       // 举手
+    case "study":
+      handL = [-13, 13]; handR = [13, 13]; props.push("book"); break
+    case "research":
+      handL = [-15, 11]; handR = [15, 11]; props.push("laptop"); break
+    case "eat":
+      handL = [-13, 11]; handR = [15, 20]; props.push("bowl"); break
+    case "commute":
+      stride = 5; handL = [-30, 20]; handR = [30, 8]; props.push("bag"); break
+    case "sport":
+      eyes = "happy"; handL = [-24, 46]; handR = [24, 46]
+      props.push("dumbbell"); break
+    case "rest":
+      handR = [26, 22]; props.push("mug"); break
+    case "phone":
+      eyes = "down"; handL = [-9, 15]; handR = [9, 15]; props.push("phone"); break
+  }
 
   // 脚
-  ctx.setFillColor(new Color(shadeHex(hex)))
-  ctx.fillEllipse(R(-18, -4, 15, 9))
-  ctx.fillEllipse(R(3, -4, 15, 9))
+  fill(SH)
+  ctx.fillEllipse(R(-18 - stride, -4, 15, 9))
+  ctx.fillEllipse(R(3 + stride, -4, 15, 9))
 
-  // 手臂
-  for (const side of [-1, 1]) {
-    fatLine(ctx, X(23 * side), Y(30), X(31 * side), Y(14), 8 * k, hex)
-    ctx.setFillColor(new Color(shadeHex(hex)))
-    ctx.fillEllipse(R(31 * side - 4.5, 14 - 4.5, 9, 9))
+  // 手臂（先画，压在身体下面）
+  for (const [side, h] of [[-1, handL], [1, handR]]) {
+    fatLine(ctx, X(23 * side), Y(30), X(h[0]), Y(h[1]), 8 * k, HEX)
+    fill(SH); ctx.fillEllipse(R(h[0] - 4.5, h[1] - 4.5, 9, 9))
+  }
+
+  // 背包：画在身体后面才像背着
+  if (props.includes("bag")) {
+    let q = new Path()
+    q.addRoundedRect(R(-33, 13, 15, 22), 5 * k, 5 * k)
+    ctx.addPath(q); fill("#8B6F5E"); ctx.fillPath()
   }
 
   // 身体和肚皮
-  let p = new Path()
-  p.addRoundedRect(R(-27, 0, 54, 48), 19 * k, 19 * k)
-  ctx.addPath(p); ctx.setFillColor(body); ctx.fillPath()
-  p = new Path()
-  p.addRoundedRect(R(-15, 3, 30, 22), 10 * k, 10 * k)
-  ctx.addPath(p); ctx.setFillColor(new Color(cream)); ctx.fillPath()
+  let p = new Path(); p.addRoundedRect(R(-27, 0, 54, 48), 19 * k, 19 * k)
+  ctx.addPath(p); fill(HEX); ctx.fillPath()
+  p = new Path(); p.addRoundedRect(R(-15, 3, 30, 22), 10 * k, 10 * k)
+  ctx.addPath(p); fill(cream); ctx.fillPath()
 
-  // 星芒呆毛：每根用四点多边形，不用旋转
-  ctx.setFillColor(new Color(shadeHex(hex)))
+  // 星芒呆毛
+  fill(SH)
   for (let i = 0; i < 11; i++) {
     const a = (i / 11) * 2 * Math.PI
     const len = (i % 2 === 0 ? 11.5 : 7.8) * k, w = 1.1 * k
@@ -283,24 +323,107 @@ function drawClawd(ctx, cx, baseY, k, hex) {
       new Point(bx + dx * len + px * w, by + dy * len + py * w),
       new Point(bx + dx * len - px * w, by + dy * len - py * w)
     ])
-    q.closeSubpath()
-    ctx.addPath(q); ctx.fillPath()
+    q.closeSubpath(); ctx.addPath(q); ctx.fillPath()
   }
 
-  // 腮红、眼睛
+  // 腮红
+  fill("#F09FB4")
   ctx.setFillColor(new Color("#F09FB4", 0.55))
   ctx.fillEllipse(R(-22, 27, 7, 5)); ctx.fillEllipse(R(15, 27, 7, 5))
-  ctx.setFillColor(new Color(ink))
-  ctx.fillEllipse(R(-13.5, 32, 8, 8)); ctx.fillEllipse(R(5.5, 32, 8, 8))
 
-  // 嘴：一段折线弧
-  const mouth = []
-  for (let i = 0; i <= 10; i++) {
-    const a = Math.PI * (1.18 + (0.64 * i) / 10)
-    mouth.push(new Point(X(0) + Math.cos(a) * 5.5 * k, Y(32) - Math.sin(a) * 5.5 * k))
+  // 眼睛
+  fill(ink)
+  if (eyes === "shut") {
+    ctx.fillEllipse(R(-13.5, 35, 8, 1.8)); ctx.fillEllipse(R(5.5, 35, 8, 1.8))
+  } else if (eyes === "down") {
+    ctx.fillEllipse(R(-13.5, 32, 8, 4.5)); ctx.fillEllipse(R(5.5, 32, 8, 4.5))
+  } else if (eyes === "happy") {
+    for (const sx of [-9.5, 9.5]) {
+      const arc = []
+      for (let i = 0; i <= 8; i++) {
+        const a = Math.PI * (0.15 + 0.7 * i / 8)
+        arc.push(new Point(X(sx) + Math.cos(a) * 4.5 * k, Y(34) - Math.sin(a) * 4.5 * k))
+      }
+      const q = new Path(); q.addLines(arc)
+      ctx.addPath(q); ctx.setStrokeColor(new Color(ink)); ctx.setLineWidth(2 * k); ctx.strokePath()
+    }
+  } else {
+    ctx.fillEllipse(R(-13.5, 32, 8, 8)); ctx.fillEllipse(R(5.5, 32, 8, 8))
   }
-  const m = new Path(); m.addLines(mouth)
-  ctx.addPath(m); ctx.setStrokeColor(new Color(ink)); ctx.setLineWidth(2 * k); ctx.strokePath()
+
+  // 嘴
+  if (eyes !== "shut") {
+    const mouth = []
+    for (let i = 0; i <= 10; i++) {
+      const a = Math.PI * (1.18 + (0.64 * i) / 10)
+      mouth.push(new Point(X(0) + Math.cos(a) * 5.5 * k, Y(32) - Math.sin(a) * 5.5 * k))
+    }
+    const m = new Path(); m.addLines(mouth)
+    ctx.addPath(m); ctx.setStrokeColor(new Color(ink)); ctx.setLineWidth(2 * k); ctx.strokePath()
+  }
+
+  // 道具，画在最前面
+  const holding = props.some(x => ["book", "laptop", "phone", "bowl"].includes(x))
+  for (const prop of props) {
+    if (prop === "book") {
+      let q = new Path(); q.addRoundedRect(R(-15, 6, 30, 15), 2 * k, 2 * k)
+      ctx.addPath(q); fill("#E88794"); ctx.fillPath()
+      fill("#FFFAF4")
+      for (let i = 0; i < 3; i++) ctx.fillEllipse(R(-11, 16 - i * 4, 22, 1.6))
+    }
+    if (prop === "laptop") {
+      let q = new Path(); q.addRoundedRect(R(-17, 5, 34, 19), 2 * k, 2 * k)
+      ctx.addPath(q); fill("#3A3F47"); ctx.fillPath()
+      fill("#A3DCC7")
+      for (const [dx, w2, dy] of [[0, 16, 19], [0, 9, 15], [0, 21, 11], [0, 13, 7]])
+        ctx.fillEllipse(R(-13 + dx, dy, w2, 1.8))
+    }
+    if (prop === "bowl") {
+      poly([new Point(X(-14), Y(17)), new Point(X(14), Y(17)),
+            new Point(X(9), Y(4)), new Point(X(-9), Y(4))], "#A8D5E6")
+      fill("#F1E2A7"); ctx.fillEllipse(R(-14, 15.5, 28, 5))   // 碗里的饭
+      fill("#7FB4CC"); ctx.fillEllipse(R(-14.5, 16.5, 29, 2.5)) // 碗沿
+    }
+    if (prop === "mug") {
+      let q = new Path(); q.addRoundedRect(R(22, 16, 12, 13), 2 * k, 2 * k)
+      ctx.addPath(q); fill("#FFFAF4"); ctx.fillPath()
+      fill("#8B6F5E"); ctx.fillEllipse(R(23.5, 25, 9, 3))
+    }
+    if (prop === "phone") {
+      let q = new Path(); q.addRoundedRect(R(-7, 9, 14, 21), 2.5 * k, 2.5 * k)
+      ctx.addPath(q); fill("#3A3F47"); ctx.fillPath()
+      q = new Path(); q.addRoundedRect(R(-5.5, 11, 11, 17), 1.5 * k, 1.5 * k)
+      ctx.addPath(q); fill("#A8D5E6"); ctx.fillPath()
+    }
+    if (prop === "dumbbell") {
+      fill("#6B6F76")
+      ctx.fillEllipse(R(-30, 42, 9, 9)); ctx.fillEllipse(R(21, 42, 9, 9))
+      ctx.fillEllipse(R(-22, 45, 44, 3))
+    }
+    if (prop === "strap") { /* 占位，实际在下面画 */ }
+    if (prop === "zzz") {
+      fill("#A8D5E6")
+      const zs = [[20, 52, 4], [27, 60, 5.5], [35, 69, 7]]
+      for (const [zx, zy, zw] of zs) {
+        ctx.fillEllipse(R(zx, zy + zw * 0.75, zw, 1.6))
+        ctx.fillEllipse(R(zx, zy, zw, 1.6))
+        poly([new Point(X(zx + zw), Y(zy + zw * 0.75)), new Point(X(zx + zw * 0.75), Y(zy + zw * 0.75)),
+              new Point(X(zx), Y(zy + 1.6)), new Point(X(zx + zw * 0.25), Y(zy + 1.6))], "#A8D5E6")
+      }
+    }
+  }
+
+  // 背包带：斜挎过胸口，这样背包才像背着而不是放在旁边
+  if (props.includes("bag")) {
+    fatLine(ctx, X(-20), Y(40), X(6), Y(14), 3 * k, SH)
+  }
+
+  // 抱着东西时，手补画在道具之上
+  if (holding) {
+    fill(SH)
+    ctx.fillEllipse(R(handL[0] - 4.5, handL[1] - 4.5, 9, 9))
+    ctx.fillEllipse(R(handR[0] - 4.5, handR[1] - 4.5, 9, 9))
+  }
 }
 
 /** 同色系但更深一档，用于脚和呆毛。 */

@@ -106,7 +106,7 @@ struct DialFace: View {
                 Dial(log: log, activities: activities, now: now, showTicks: !compact)
 
                 VStack(spacing: side * 0.02) {
-                    ClawdDrawn(height: side * 0.30, tint: current?.0.color)
+                    ClawdDrawn(height: side * 0.30)   // Clawd 用自己的颜色，不跟状态变
                     if let (a, secs) = current {
                         Text(a.name)
                             .font(.system(size: side * 0.075, weight: .semibold))
