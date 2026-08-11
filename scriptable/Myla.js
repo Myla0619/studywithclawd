@@ -439,12 +439,15 @@ async function runApp() {
   // 脚本按序号去重。实测过五种丢包模式（全通/只通最后一条/只通第一条/
   // 一条不通/隔一条丢一条），结果完全一致。
   //
-  //   ① shouldAllowRequest      页面发起跳转，这里拦下来（下面这段）
-  //   ② 每两秒轮询一次页面变量   窗口开着时
-  //   ③ pagehide 时页面再补发    关窗口那一刻
-  //   ④ 关窗口后再读一遍         最后兜底
+  //   ① 每次点击当场发 myladay:// 跳转，这里拦下来（下面这段）
+  //   ② 关窗口后再读一遍页面变量
   //
-  // ①：页面每做一件事就发起一次 myladay:// 跳转，这里拦下来、落盘、拒绝导航。
+  // 只留这两条，因为它们是 MylaTest 在用户手机上实测为绿的两条。
+  // 原来还有一条「窗口开着时每两秒轮询」，用的是对已弹出 WebView 调
+  // evaluateJavaScript——白屏事件里证实这个原语会永远挂起，挂起的调用
+  // 可能把桥堵死，连 ① 的回调都送不进来。体检没有轮询所以绿、
+  // 真 app 有轮询所以死，这是 baseURL 排除之后剩下的唯一结构性差别。
+  // 轮询删了。
   let appliedUpTo = 0
   let wantExport = false
   wv.shouldAllowRequest = req => {
@@ -471,12 +474,7 @@ async function runApp() {
     return false
   }
 
-  // 第二条：窗口开着的时候每两秒读一次页面。用的是和第三条同一个 API。
-  // 整段用 race 兜住——不通就跳出轮询，绝不会卡在一个永远不兑现的 promise 上
-  // （白屏那次就是卡在这种地方）。
-  const closed = wv.present(true).then(() => "closed")
-  let done = false
-  closed.then(() => { done = true })
+  const closed = wv.present(true)
 
   const take = batch => {
     let n = 0
@@ -494,16 +492,6 @@ async function runApp() {
   const clearPending = () => wv.evaluateJavaScript(
     "localStorage.removeItem('myla_pending')").catch(() => {})
 
-  while (!done) {
-    const r = await Promise.race([
-      closed,
-      wv.evaluateJavaScript("JSON.stringify(window.LOG || [])").catch(() => "dead")
-    ])
-    if (r === "closed") break
-    if (r === "dead") break            // 这条通道不支持，别再试了
-    try { take(JSON.parse(r || "[]")) } catch (e) { break }
-    await Promise.race([closed, sleep(2000)])
-  }
   await closed
 
   // 第三条：关窗口后再读一遍。按 i 去重，几条通道同时生效也不会重复执行。

@@ -49,7 +49,11 @@ try {
 } catch (e) { saveNote = "❌ " + e.message }
 results.push(["  真实的存盘流程", saveNote])
 
-// ---------------------------------------------------------------- ② / ③ 页面通道
+// ---------------------------------------------------------------- 页面通道
+// 关键实验：连发三次跳转，其中一次轮询挂在中间。
+// 真 app 原来就是「跳转 + 轮询」并存的——如果 ping1 到了而 ping2/3 没到，
+// 就证明挂起的 evaluateJavaScript 会把桥堵死，吃掉后面的跳转。
+
 const PAGE = `
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -57,65 +61,68 @@ const PAGE = `
  h2{font-size:19px;margin:0 0 6px}
  p{color:#9a9298;font-size:14px;line-height:1.5;margin:0 0 20px}
  b{display:block;background:#1E1A24;border-radius:14px;padding:16px;margin-bottom:12px;font-weight:400}
- .g{color:#7DD73C}
 </style>
-<h2>正在测两条通道</h2>
-<p>这一页会自己发一次消息给脚本。看完往下滑关掉就行。</p>
-<b id="s1">① 实时通道：发送中…</b>
-<b>② 关掉这一页之后，脚本会来读这里的变量</b>
-<b id="s3" onclick="urlScheme()">③ 点这一行测 URL scheme（会重开一次本脚本）</b>
+<h2>正在连发三条消息</h2>
+<p>0.5 秒、1.5 秒、2.5 秒各一条。等三秒之后往下滑关掉这一页。</p>
+<b id="s">发送中…</b>
 <script>
- window.__marker = "MARK" + Date.now()          // 关窗口后脚本来读这个
- setTimeout(function () {
-   try {
-     location.href = "myladay://ping?v=" + encodeURIComponent(window.__marker)
-     document.getElementById("s1").innerHTML = '① 实时通道：<span class="g">已发出，等脚本确认</span>'
-   } catch (e) {
-     document.getElementById("s1").textContent = "① 实时通道：发不出去 " + e.message
-   }
- }, 600)
- function urlScheme() {
-   location.href = "scriptable:///run?scriptName=MylaTest&ping=1"
+ window.__got = []
+ function send(n) {
+   try { location.href = "myladay://ping?v=p" + n } catch (e) {}
+   window.__got.push(n)
+   document.getElementById("s").textContent = "已发出 " + window.__got.join("、")
  }
+ setTimeout(function(){ send(1) }, 500)
+ setTimeout(function(){ send(2) }, 1500)
+ setTimeout(function(){ send(3) }, 2500)
 </script>`
 
 const wv = new WebView()
 await wv.loadHTML(PAGE)
 
-let live = "❌ 没收到（这条通道不工作）"
-let liveMarker = null
-try {
-  wv.shouldAllowRequest = req => {
-    const u = (req && req.url) || ""
-    if (u.indexOf("myladay://") === 0) {
-      live = "✅ 收到了"
-      try { liveMarker = decodeURIComponent(u.split("v=")[1] || "") } catch (e) {}
-      return false
-    }
-    return true
+const arrived = []
+wv.shouldAllowRequest = req => {
+  const u = (req && req.url) || ""
+  if (u.indexOf("myladay://") === 0) {
+    arrived.push(u.slice(u.indexOf("v=") + 2))
+    return false
   }
-} catch (e) { live = "❌ 这个版本没有 shouldAllowRequest：" + e.message }
+  return true
+}
 
-await wv.present(true)
-results.push(["② 实时通道 shouldAllowRequest", live])
+// 故意在 ping1 和 ping2 之间发起一次轮询（对已弹出的页面调 evaluateJavaScript）。
+// 真 app 原来每两秒就来一次这个。它要是把桥堵死，ping2/ping3 就到不了。
+const presented = wv.present(true)
+let pollState = "还挂着（没兑现也没报错）"
+setTimeoutLike(1000).then(() => {
+  wv.evaluateJavaScript("1+1")
+    .then(v => { pollState = "返回了 " + v })
+    .catch(e => { pollState = "报错：" + e.message })
+})
+await presented
 
-let after = "❌ 读不到（这条通道不工作）"
+results.push(["② 三连发（中间夹一次轮询）",
+  arrived.length === 3 ? "✅ 三条都到了：" + arrived.join("、")
+  : arrived.length ? "⚠️ 只到了 " + arrived.join("、") + " —— 轮询把桥堵死了，后面的被吃掉"
+  : "❌ 一条都没到"])
+results.push(["  轮询那一下的下场", pollState])
+
+let after = "❌ 读不到"
 try {
-  const v = await wv.evaluateJavaScript("window.__marker")
-  after = v ? "✅ 读到了 " + String(v).slice(0, 12) : "❌ 返回空"
+  const v = await wv.evaluateJavaScript("JSON.stringify(window.__got || [])")
+  after = v ? "✅ 读到了 " + v : "❌ 返回空"
 } catch (e) { after = "❌ " + e.message }
 results.push(["③ 关窗口后读页面变量", after])
 
-if (liveMarker) results.push(["  两条通道拿到的是同一份吗", liveMarker.slice(0, 12)])
+function setTimeoutLike(ms) { return new Promise(r => Timer.schedule(ms, false, r)) }
 
 // ---------------------------------------------------------------- 结论
-const ok1 = live.indexOf("✅") === 0
-const ok2 = after.indexOf("✅") === 0
+const okAll = arrived.length === 3
+const okSome = arrived.length > 0
 let verdict
-if (ok1 && ok2) verdict = "两条都通 —— 那数据丢失是别的原因，把这张图发我"
-else if (ok1) verdict = "只有实时通道通 —— 够用，我把兜底那条去掉"
-else if (ok2) verdict = "只有关窗口那条通 —— 我把实时通道去掉"
-else verdict = "两条都不通 —— 我改用 URL scheme（第 ③ 行那个，你点一下看能不能通）"
+if (okAll) verdict = "三条都到 —— 通道没问题。app 还存不住的话把这张图发我，那就是别的地方。"
+else if (okSome) verdict = "只到了一部分 —— 轮询会堵死桥，删掉轮询的版本（20260812-0403 及以后）应该就好了。"
+else verdict = "一条都没到 —— 连单发都不行了，把这张图发我。"
 
 try { fm.remove(TEST) } catch (e) {}
 
