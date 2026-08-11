@@ -11,7 +11,7 @@ const segs = C.segments(data)
 const now = Date.now()
 
 const w = new ListWidget()
-w.backgroundColor = new Color("#17171B")
+w.backgroundColor = new Color("#1B1720")
 w.setPadding(10, 10, 10, 10)
 // 点小组件直接打开主脚本
 w.url = "scriptable:///run?scriptName=MylaDay"
@@ -40,7 +40,7 @@ if (family === "small") {
   if (!top.length) {
     const e = right.addText("今天还没记录")
     e.font = Font.systemFont(11)
-    e.textColor = new Color("#FFFFFF", 0.45)
+    e.textColor = new Color("#F6F1EC", 0.45)
   }
   for (const a of top) {
     const line = right.addStack()
@@ -52,11 +52,11 @@ if (family === "small") {
     line.addSpacer(5)
     const name = line.addText(a.name)
     name.font = Font.systemFont(11)
-    name.textColor = new Color("#FFFFFF", 0.9)
+    name.textColor = new Color("#F6F1EC", 0.9)
     line.addSpacer()
     const val = line.addText(C.hhmm(t[a.id]))
     val.font = Font.systemFont(11)
-    val.textColor = new Color("#FFFFFF", 0.45)
+    val.textColor = new Color("#F6F1EC", 0.45)
     right.addSpacer(4)
   }
 }

@@ -29,10 +29,10 @@ struct ClawdDrawn: View {
                        width: w * s, height: h * s)
             }
 
-            let body = tint ?? Color(hex: "D9784F")
-            let shade = (tint ?? Color(hex: "D9784F")).opacity(0.82)
-            let cream = Color(hex: "F9F2E8")
-            let ink = Color(hex: "2B2119")
+            let body = tint ?? Color(hex: "EEBC96")
+            let shade = (tint ?? Color(hex: "EEBC96")).opacity(0.88)
+            let cream = Color(hex: "FFFAF4")
+            let ink = Color(hex: "5A4A44")
 
             // Feet
             ctx.fill(Path(ellipseIn: R(-18, -4, 15, 9)), with: .color(shade))
@@ -78,7 +78,7 @@ struct ClawdDrawn: View {
             ctx.fill(burst, with: .color(shade))
 
             // Cheeks
-            let pink = Color(hex: "F08C80").opacity(0.55)
+            let pink = Color(hex: "F09FB4").opacity(0.55)
             ctx.fill(Path(ellipseIn: R(-22, 27, 7, 5)), with: .color(pink))
             ctx.fill(Path(ellipseIn: R(15, 27, 7, 5)), with: .color(pink))
 

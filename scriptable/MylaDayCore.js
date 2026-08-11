@@ -12,16 +12,16 @@ const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 // ---------------------------------------------------------------- 数据
 
 const DEFAULT_ACTIVITIES = [
-  { id: "sleep",    name: "睡觉",   hex: "#3B4A6B" },
-  { id: "class",    name: "上课",   hex: "#7A5EA8" },
-  { id: "study",    name: "学习",   hex: "#D06749" },
-  { id: "research", name: "科研",   hex: "#3F8F8A" },
-  { id: "eat",      name: "吃饭",   hex: "#D4A03C" },
-  { id: "commute",  name: "通勤",   hex: "#5E7A94" },
-  { id: "sport",    name: "运动",   hex: "#5D9856" },
-  { id: "rest",     name: "休息",   hex: "#C98BA0" },
-  { id: "phone",    name: "刷手机", hex: "#B85450" },
-  { id: "other",    name: "其他",   hex: "#6B6B70" }
+  { id: "sleep",    name: "睡觉",  hex: "#A0B1E3" },
+  { id: "class",    name: "上课",  hex: "#D1B3E6" },
+  { id: "study",    name: "学习",  hex: "#EEBC96" },
+  { id: "research", name: "科研",  hex: "#A3DCC7" },
+  { id: "eat",      name: "吃饭",  hex: "#F1E2A7" },
+  { id: "commute",  name: "通勤",  hex: "#A8D5E6" },
+  { id: "sport",    name: "运动",  hex: "#C0DDA6" },
+  { id: "rest",     name: "休息",  hex: "#F2C0D5" },
+  { id: "phone",    name: "刷手机", hex: "#E88794" },
+  { id: "other",    name: "其他",  hex: "#DBD2C7" }
 ]
 
 function load() {
@@ -210,11 +210,11 @@ function drawDial(data, segs, size, opts) {
 
   const open = openSegment(segs)
   const cur = open ? activityOf(data, open.a) : null
-  drawClawd(ctx, cx, cy + size * 0.010, size * 0.0042, cur ? cur.hex : "#D9784F")
+  drawClawd(ctx, cx, cy + size * 0.010, size * 0.0042, cur ? cur.hex : "#EEBC96")
 
   if (cur) {
     ctx.setTextAlignedCenter()
-    ctx.setTextColor(new Color("#FFFFFF"))
+    ctx.setTextColor(new Color("#F6F1EC"))
     ctx.setFont(Font.boldSystemFont(size * 0.072))
     ctx.drawTextInRect(cur.name,
       new Rect(0, cy + size * 0.045, size, size * 0.10))
@@ -242,7 +242,7 @@ function fatLine(ctx, x0, y0, x1, y1, w, color) {
 function drawClawd(ctx, cx, baseY, k, hex) {
   const body = new Color(hex)
   const shade = new Color(hex, 1)
-  const cream = "#F9F2E8", ink = "#2B2119"
+  const cream = "#FFFAF4", ink = "#5A4A44"
   // y 往下为正，所以模型里的 +y 要减
   const X = x => cx + x * k
   const Y = y => baseY - y * k
@@ -288,7 +288,7 @@ function drawClawd(ctx, cx, baseY, k, hex) {
   }
 
   // 腮红、眼睛
-  ctx.setFillColor(new Color("#F08C80", 0.55))
+  ctx.setFillColor(new Color("#F09FB4", 0.55))
   ctx.fillEllipse(R(-22, 27, 7, 5)); ctx.fillEllipse(R(15, 27, 7, 5))
   ctx.setFillColor(new Color(ink))
   ctx.fillEllipse(R(-13.5, 32, 8, 8)); ctx.fillEllipse(R(5.5, 32, 8, 8))
@@ -307,7 +307,7 @@ function drawClawd(ctx, cx, baseY, k, hex) {
 function shadeHex(hex) {
   const h = hex.replace("#", "")
   const n = parseInt(h, 16)
-  const f = 0.78
+  const f = 0.86
   const r = Math.round(((n >> 16) & 255) * f)
   const g = Math.round(((n >> 8) & 255) * f)
   const b = Math.round((n & 255) * f)

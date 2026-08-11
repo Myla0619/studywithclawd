@@ -72,7 +72,7 @@ async function refresh(table) {
     const r = new UITableRow()
     r.dismissOnSelect = false
     const c = r.addText(`✂︎ 这一段已经 ${C.hhmm(C.duration(open, now))}，中间换过吗？`)
-    c.titleColor = new Color("#D4A03C")
+    c.titleColor = new Color("#F1E2A7")
     c.titleFont = Font.systemFont(14)
     r.onSelect = async () => { await splitFlow(open); await refresh(table); table.reload() }
     table.addRow(r)
@@ -89,7 +89,7 @@ async function refresh(table) {
     c.widthWeight = 70
     const d = r.addText(t[a.id] ? C.hhmm(t[a.id]) : "")
     d.rightAligned()
-    d.titleColor = new Color("#FFFFFF", 0.45)
+    d.titleColor = new Color("#F6F1EC", 0.45)
     d.titleFont = Font.systemFont(13)
     d.widthWeight = 30
     r.onSelect = async () => {
@@ -114,7 +114,7 @@ async function refresh(table) {
     c.titleColor = new Color(a.hex)
     c.widthWeight = 60
     const d = r.addText(C.hhmm(t[a.id])); d.rightAligned(); d.widthWeight = 40
-    d.titleColor = new Color("#FFFFFF", 0.5)
+    d.titleColor = new Color("#F6F1EC", 0.5)
     r.onSelect = async () => { await showActivity(a); await refresh(table); table.reload() }
     table.addRow(r)
   }
@@ -146,7 +146,7 @@ async function showActivity(a) {
     c.widthWeight = 60
     const d = r.addText(C.hhmm(C.duration(s, now)))
     d.rightAligned(); d.widthWeight = 40
-    d.titleColor = new Color("#FFFFFF", 0.5)
+    d.titleColor = new Color("#F6F1EC", 0.5)
     // 点某一段可以直接拆开它
     r.onSelect = async () => { await splitFlow(s); await showActivity(a) }
     table.addRow(r)
@@ -193,7 +193,7 @@ async function showSpan() {
       r.dismissOnSelect = false
       const c = r.addText(a.name); c.titleColor = new Color(a.hex); c.widthWeight = 60
       const d = r.addText(C.hhmm(agg[a.id])); d.rightAligned(); d.widthWeight = 40
-      d.titleColor = new Color("#FFFFFF", 0.5)
+      d.titleColor = new Color("#F6F1EC", 0.5)
       table.addRow(r)
     }
   }
@@ -274,7 +274,7 @@ async function manageActivities() {
   }
   const add = new UITableRow()
   add.dismissOnSelect = false
-  add.addText("＋ 加一个").titleColor = new Color("#5D9856")
+  add.addText("＋ 加一个").titleColor = new Color("#C0DDA6")
   add.onSelect = async () => {
     const al = new Alert()
     al.title = "新状态"
@@ -356,7 +356,7 @@ function barChart(slices, activity, w, h) {
     const secs = s.totals[activity.id] || 0
     const frac = Math.min(1, secs / (8 * 3600))
     const bh = Math.max(2, (h - 4) * frac)
-    ctx.setFillColor(new Color(secs > 0 ? activity.hex : "#FFFFFF", secs > 0 ? 1 : 0.08))
+    ctx.setFillColor(new Color(secs > 0 ? activity.hex : "#F6F1EC", secs > 0 ? 1 : 0.08))
     ctx.fillRect(new Rect(i * (bw + gap), h - bh, bw, bh))
   })
   return ctx.getImage()
@@ -388,7 +388,7 @@ function addHeader(table, text) {
   const r = new UITableRow()
   r.isHeader = true
   const c = r.addText(text)
-  c.titleColor = new Color("#FFFFFF", 0.55)
+  c.titleColor = new Color("#F6F1EC", 0.55)
   c.titleFont = Font.semiboldSystemFont(13)
   table.addRow(r)
 }
@@ -397,7 +397,7 @@ function addNote(table, text) {
   const r = new UITableRow()
   r.dismissOnSelect = false
   const c = r.addText(text)
-  c.titleColor = new Color("#FFFFFF", 0.4)
+  c.titleColor = new Color("#F6F1EC", 0.4)
   c.titleFont = Font.systemFont(12)
   c.centerAligned()
   table.addRow(r)
