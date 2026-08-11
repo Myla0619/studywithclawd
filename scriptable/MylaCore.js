@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-0138"
+const VERSION = "20260812-0155"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
@@ -28,6 +28,11 @@ const DEFAULT_ACTIVITIES = [
   { id: "other",    name: "其他",  hex: "#C4A582" }
 ]
 
+/**
+ * 读数据。**每一条出口都必须过 migrate**——「第一次用」和「文件读坏了」这两条路
+ * 原来是直接 return 一个字面量的，于是 todos / ui / countdowns / autoGrace 这些
+ * 后加的字段全是缺的，页面一取就 TypeError。加字段时最容易漏的就是这里。
+ */
 function load() {
   if (!fm.fileExists(DATA)) {
     // 主文件没了但备份还在（比如上次写到一半崩了）——用备份恢复
@@ -38,7 +43,7 @@ function load() {
         return migrate(b)
       } catch (e) { /* 备份也坏了，下面走空档 */ }
     }
-    return { v: SCHEMA, activities: DEFAULT_ACTIVITIES, days: {} }
+    return migrate({})
   }
   try {
     return migrate(JSON.parse(fm.readString(DATA)))
@@ -54,7 +59,7 @@ function load() {
         return migrate(b)
       } catch (e3) { /* 都坏了 */ }
     }
-    return { v: SCHEMA, activities: DEFAULT_ACTIVITIES, days: {}, loadFailed: true }
+    return migrate({ loadFailed: true })
   }
 }
 

@@ -65,6 +65,33 @@ for (let back = 0; back < 3; back++) {
   }
 }
 
+// ---- 数据文件本身：主文件、备份、留档的坏文件
+const fmL = FileManager.local()
+const docs = fmL.documentsDirectory()
+const files = fmL.listContents(docs).filter(f => f.indexOf("myladay") === 0)
+say("── 数据文件", files.length ? files.length + " 个" : "一个都没有")
+for (const f of files) {
+  const path = fmL.joinPath(docs, f)
+  let info
+  try {
+    const txt = fmL.readString(path)
+    let days = "解析不了（这份是坏的）"
+    try {
+      const d = JSON.parse(txt)
+      const n = Object.keys(d.days || {}).length
+      let segs = 0
+      for (const k in (d.days || {})) segs += d.days[k].length
+      days = n + " 天 / " + segs + " 段"
+    } catch (e) {}
+    info = Math.round(txt.length / 1024) + " KB · " + days
+  } catch (e) { info = "读不出来：" + e.message }
+  say("  " + f, info)
+}
+if (files.some(f => f.indexOf("myladay.corrupt") === 0)) {
+  say("⚠️ 有留档的坏文件",
+      "上面哪个 corrupt 文件如果还能解析出天数，记录就还能救回来，告诉我")
+}
+
 // ---- 待发的通知（提醒的按钮是最大嫌疑）
 const pending = await Notification.allPending()
 const mine = pending.filter(n => n.identifier.indexOf("myladay") === 0)

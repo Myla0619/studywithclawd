@@ -6,7 +6,7 @@
 // 或者文件写到了 A 目录而脚本列表读的是 B 目录。这三样这里都会报出来。
 
 const REPO = "Myla0619/studywithclawd"
-const EXPECT = "20260812-0138"          // 期望装上的版本
+const EXPECT = "20260812-0155"          // 期望装上的版本
 const FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js", "MylaWhy.js"]
 
 const here = module.filename
