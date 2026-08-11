@@ -10,6 +10,10 @@
 
 const C = importModule("MylaDayCore")
 
+// 跟随系统外观，不然浅色模式下浅色文字全看不见
+const INK  = a => Color.dynamic(new Color("#2A2622", a === undefined ? 1 : a),
+                                new Color("#F6F1EC", a === undefined ? 1 : a))
+
 // ---------------------------------------------------------------- 入口
 
 let data = C.rollover(C.load())
@@ -83,13 +87,17 @@ async function refresh(table) {
     const r = new UITableRow()
     r.dismissOnSelect = false
     const on = open && open.a === a.id
-    const c = r.addText(on ? `● ${a.name}` : `○ ${a.name}`)
-    c.titleColor = new Color(a.hex)
+    const dot = r.addText(on ? "●" : "○")
+    dot.titleColor = new Color(a.hex)
+    dot.titleFont = Font.systemFont(17)
+    dot.widthWeight = 10
+    const c = r.addText(a.name)
+    c.titleColor = INK()
     c.titleFont = on ? Font.boldSystemFont(17) : Font.systemFont(17)
-    c.widthWeight = 70
+    c.widthWeight = 60
     const d = r.addText(t[a.id] ? C.hhmm(t[a.id]) : "")
     d.rightAligned()
-    d.titleColor = new Color("#F6F1EC", 0.45)
+    d.titleColor = INK(0.45)
     d.titleFont = Font.systemFont(13)
     d.widthWeight = 30
     r.onSelect = async () => {
@@ -110,11 +118,10 @@ async function refresh(table) {
   for (const a of ranked) {
     const r = new UITableRow()
     r.dismissOnSelect = false
-    const c = r.addText(a.name)
-    c.titleColor = new Color(a.hex)
-    c.widthWeight = 60
+    const dot = r.addText("●"); dot.titleColor = new Color(a.hex); dot.widthWeight = 10
+    const c = r.addText(a.name); c.titleColor = INK(); c.widthWeight = 50
     const d = r.addText(C.hhmm(t[a.id])); d.rightAligned(); d.widthWeight = 40
-    d.titleColor = new Color("#F6F1EC", 0.5)
+    d.titleColor = INK(0.5)
     r.onSelect = async () => { await showActivity(a); await refresh(table); table.reload() }
     table.addRow(r)
   }
@@ -146,7 +153,7 @@ async function showActivity(a) {
     c.widthWeight = 60
     const d = r.addText(C.hhmm(C.duration(s, now)))
     d.rightAligned(); d.widthWeight = 40
-    d.titleColor = new Color("#F6F1EC", 0.5)
+    d.titleColor = INK(0.5)
     // 点某一段可以直接拆开它
     r.onSelect = async () => { await splitFlow(s); await showActivity(a) }
     table.addRow(r)
@@ -193,7 +200,7 @@ async function showSpan() {
       r.dismissOnSelect = false
       const c = r.addText(a.name); c.titleColor = new Color(a.hex); c.widthWeight = 60
       const d = r.addText(C.hhmm(agg[a.id])); d.rightAligned(); d.widthWeight = 40
-      d.titleColor = new Color("#F6F1EC", 0.5)
+      d.titleColor = INK(0.5)
       table.addRow(r)
     }
   }
@@ -388,7 +395,7 @@ function addHeader(table, text) {
   const r = new UITableRow()
   r.isHeader = true
   const c = r.addText(text)
-  c.titleColor = new Color("#F6F1EC", 0.55)
+  c.titleColor = INK(0.55)
   c.titleFont = Font.semiboldSystemFont(13)
   table.addRow(r)
 }
@@ -397,7 +404,7 @@ function addNote(table, text) {
   const r = new UITableRow()
   r.dismissOnSelect = false
   const c = r.addText(text)
-  c.titleColor = new Color("#F6F1EC", 0.4)
+  c.titleColor = INK(0.4)
   c.titleFont = Font.systemFont(12)
   c.centerAligned()
   table.addRow(r)

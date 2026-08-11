@@ -164,6 +164,16 @@ function drawDial(data, segs, size, opts) {
   ctx.opaque = false
   ctx.respectScreenScale = true
 
+  // 自带底色：Scriptable 的表格会跟系统走浅色，透明底的话浅色文字和
+  // 淡轨道全都看不见。画成一张自带深底的卡片，两种模式下长一样。
+  if (opts.card !== false) {
+    const card = new Path()
+    card.addRoundedRect(new Rect(0, 0, size, size), size * 0.5, size * 0.5)
+    ctx.addPath(card)
+    ctx.setFillColor(new Color("#1B1720"))
+    ctx.fillPath()
+  }
+
   const cx = size / 2, cy = size / 2
   const rOut = size / 2 - 1
   const rIn = rOut * (1 - (opts.thickness || 0.26))
