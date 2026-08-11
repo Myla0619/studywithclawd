@@ -64,21 +64,42 @@ async function runApp() {
   const json = JSON.stringify(payload())
     .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")
   await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ")</" + "script>")
+
+  // 主存盘通道：页面每做一件事就发起一次 myladay:// 跳转，这里拦下来、落盘、拒绝导航。
+  // WebView 弹出来之后这是唯一能实时收到东西的地方。
+  let appliedUpTo = 0
+  let wantExport = false
+  wv.shouldAllowRequest = req => {
+    const u = (req && req.url) || ""
+    if (u.indexOf("myladay://") !== 0) return true
+    try {
+      const m = JSON.parse(decodeURIComponent(u.slice(u.indexOf("m=") + 2)))
+      if (m.i >= appliedUpTo) {
+        appliedUpTo = m.i + 1
+        if (m.t === "export") wantExport = true
+        else { apply(m); C.save(data) }
+      }
+    } catch (e) { /* 收不下就等关窗口时的兜底 */ }
+    return false
+  }
+
   await wv.present(true)
 
-  // 窗口关掉了，把页面记下的操作拿回来
+  // 兜底：万一上面那条通道不工作，关窗口后再读一遍页面记的操作。
+  // 按 i 去重，所以两条路同时生效也不会重复执行。
   let log = []
   try {
     const raw = await wv.evaluateJavaScript("JSON.stringify(window.LOG || [])")
     log = JSON.parse(raw || "[]")
-  } catch (e) { /* 读不到就当没操作过，总比乱写强 */ }
+  } catch (e) { /* 读不到就算了，主通道多半已经存过 */ }
 
-  let wantExport = false
+  let late = 0
   for (const m of log) {
+    if (m.i !== undefined && m.i < appliedUpTo) continue
     if (m.t === "export") { wantExport = true; continue }
-    apply(m)
+    apply(m); late++
   }
-  C.save(data)
+  if (late) C.save(data)
   scheduleNudge()
 
   // 系统的文件选择器盖不到 WebView 上面，所以导出只能等窗口关掉再弹

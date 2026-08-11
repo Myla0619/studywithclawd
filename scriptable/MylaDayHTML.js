@@ -179,13 +179,25 @@ nav button.on { color: var(--ink); }
 // ---------------------------------------------------------------- 状态
 var P = null                                  // 脚本传进来的数据
 var S = { tab: "today", sheet: null, pending: null }
-var LOG = []                                  // 关窗口时脚本读这个回放
+var LOG = []                                  // 关窗口时脚本读这个回放（后备）
 window.LOG = LOG
+var SEQ = 0
+
+// 每条操作立刻推给脚本存盘。走的是「页面发起跳转、脚本在 shouldAllowRequest 里拦下来」
+// 这条道——WebView 弹出来之后，这是唯一能实时把东西送出去的通道。
+// 关窗口时脚本还会再读一遍 LOG 兜底，两边都按 i 去重，不会重复执行。
+// 网页调试时（http/https）不走这条，不然浏览器会真的去导航。
+var URLCHAN = location.protocol !== "http:" && location.protocol !== "https:"
 
 var SPANS = [["周", 7], ["月", 30], ["3个月", 90]]
 var CHARTS = [["柱状", "bar"], ["圆盘", "dial"]]
 
-function log(t, v, v2) { LOG.push({ t: t, v: v, v2: v2, at: Date.now() }) }
+function log(t, v, v2) {
+  var m = { i: SEQ++, t: t, v: v, v2: v2, at: Date.now() }
+  LOG.push(m)
+  if (!URLCHAN) return
+  try { location.href = "myladay://save?m=" + encodeURIComponent(JSON.stringify(m)) } catch (e) {}
+}
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
