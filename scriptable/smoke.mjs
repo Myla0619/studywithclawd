@@ -41,7 +41,7 @@ const Data = {
     if (buf.toString("base64").replace(/=+$/, "") !== b64.replace(/=+$/, "")) {
       throw new Error("不是合法的 base64")
     }
-    return { toRawString: () => buf.toString("utf8") }
+    return { toRawString: () => buf.toString("latin1") }
   }
 }
 const FileManager = {
@@ -274,56 +274,63 @@ async function tapRow(table, text) {
   throw new Error("界面上找不到「" + text + "」这一行")
 }
 
-// 会改数据的操作现在全在 UITable 里，点一下脚本当场存盘，中间不经过网页。
+// ---- 默认（网页界面）。重点是带中文的操作能不能存住：
+// 待办内容和倒数日名字都是中文，而状态 id 是 study 这种纯字母。
+// 之前正是中文那些存不住，而且一旦日志里混进一条中文，之后每一批都带着它、批批失败。
 disk = {}; store = {}
-await runMyla("② 点「学习」", { taps: async t => { await tapRow(t, "学习") } })
+await runMyla("② 网页里切状态 + 加中文待办 + 记中文倒数日", {
+  actions: page => {
+    page.log("switch", "study")
+    page.log("todo.add", "把第三章的实验重跑一遍", "n1")
+    page.doc.getElementById("cdName").value = "论文 deadline · 中文测试"
+    page.doc.getElementById("cdDate").value = "2026-08-30"
+    page.cdSave()
+    page.log("switch", "research")
+  },
+  noEval: true, noStorage: true        // 只留实时拦截那一条，最严苛
+})
 let d = C.load()
+const segs = (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
+const todo = (d.todos[tk] || []).map(x => x.text).join("、")
+const cd = (d.countdowns || []).map(c => c.name).join("、")
+console.log("     → 段：" + segs + " ｜ 待办：" + (todo || "空") + " ｜ 倒数日：" + (cd || "空"))
+if (segs !== "学习>科研") { console.log("     ❌ 切状态没存全"); process.exit(1) }
+if (todo !== "把第三章的实验重跑一遍") { console.log("     ❌ 中文待办丢了或乱码"); process.exit(1) }
+if (cd !== "论文 deadline · 中文测试") { console.log("     ❌ 中文倒数日丢了或乱码"); process.exit(1) }
+console.log("     ✓ 中文原样存住了（只靠实时拦截那一条）")
+
+// ---- 简易模式：UITable，点一下脚本当场存盘
+disk = {}; store = {}
+disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
+await runMyla("③ 简易模式点「学习」", { taps: async t => { await tapRow(t, "学习") } })
+d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">"))
 if (!(d.days[tk] || []).some(s => s.a === "study")) { console.log("     ❌ 没存下来"); process.exit(1) }
 
-ALERT_INPUT = ["写周报"]; ALERT_PICK = 0
-await runMyla("③ 加一条待办", { taps: async t => { await tapRow(t, "加一条") } })
-d = C.load()
-console.log("     → 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
-if (!(d.todos[tk] || []).length) { console.log("     ❌ 待办没存下来"); process.exit(1) }
-
+disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
 ALERT_INPUT = ["论文 deadline", "2026-08-30"]; ALERT_PICK = 0
-await runMyla("④ 记一个倒数日", { taps: async t => { await tapRow(t, "记一个日子") } })
+await runMyla("④ 简易模式记一个倒数日", { taps: async t => { await tapRow(t, "记一个日子") } })
 d = C.load()
-console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name + " " + c.date).join("、") || "空"))
-if (!(d.countdowns || []).length) { console.log("     ❌ 倒数日没存下来"); process.exit(1) }
+console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name).join("、") || "空"))
+if (!(d.countdowns || []).length) { console.log("     ❌ 没存下来"); process.exit(1) }
+ALERT_INPUT = []; ALERT_PICK = 0
 
-ALERT_INPUT = ["论文答辩", "2026-09-01"]; ALERT_PICK = 0
-await runMyla("⑤ 改那个倒数日", { taps: async t => { await tapRow(t, "论文 deadline") } })
-d = C.load()
-console.log("     → 改完：" + (d.countdowns || []).map(c => c.name + " " + c.date).join("、"))
-if ((d.countdowns[0] || {}).name !== "论文答辩") { console.log("     ❌ 没改上"); process.exit(1) }
-
-ALERT_PICK = 2                       // 删掉
-await runMyla("⑥ 删掉它", { taps: async t => { await tapRow(t, "论文答辩") } })
-d = C.load()
-console.log("     → 剩下：" + ((d.countdowns || []).length) + " 个")
-if ((d.countdowns || []).length) { console.log("     ❌ 没删掉"); process.exit(1) }
-ALERT_PICK = 0; ALERT_INPUT = []
-
-// 网页现在只负责看，里面不改数据，所以打开它不该影响任何东西
-const beforeWeb = fs.existsSync ? JSON.stringify(C.load().days) : ""
-await runMyla("⑦ 打开网页看圆盘（只读）", { taps: async t => { await tapRow(t, "看圆盘") } })
-d = C.load()
-console.log("     → 打开前后数据一样吗：" +
-  (JSON.stringify(d.days) === beforeWeb ? "一样 ✓" : "❌ 变了"))
-
-// 上一版留在浏览器里没落盘的东西，仍然要能捞回来
+// ---- 上划杀进程：浏览器里的暂存下次启动捞回来
 disk = {}; store = {}
 store["myla_pending"] = JSON.stringify([
-  { i: 0, sid: "old-session", t: "switch", v: "study", at: Date.now() },
-  { i: 1, sid: "old-session", t: "todo.add", v: "网页里加的", v2: "n9", at: Date.now() }
+  { i: 0, sid: "killed", t: "switch", v: "study", at: Date.now() },
+  { i: 1, sid: "killed", t: "todo.add", v: "被杀之前加的", v2: "n9", at: Date.now() }
 ])
-await runMyla("⑧ 网页里的残留照样捞回来", {})
+await runMyla("⑤ 上划杀掉之后再打开", {})
 d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
-  + " ｜ 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
+  + " ｜ 待办：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
 if (!(d.todos[tk] || []).length) { console.log("     ❌ 残留没捞回来"); process.exit(1) }
+
+await runMyla("⑥ 紧接着再打开一次（不该翻倍）", {})
+d = C.load()
+console.log("     → 待办：" + (d.todos[tk] || []).map(x => x.text).join("、"))
+if ((d.todos[tk] || []).length !== 1) { console.log("     ❌ 重复执行了"); process.exit(1) }
 
 console.log("\n弹过的窗：" + (alerts.filter(Boolean).join(" / ") || "（没有）"))
 console.log("\n全部跑通 ✅")

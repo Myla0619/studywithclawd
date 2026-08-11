@@ -221,9 +221,23 @@ function flush() {
   if (!URLCHAN) return
   try {
     var recent = LOG.slice(-200)            // URL 不能无限长，留最近 200 条
-    // 用 base64 而不是 encodeURIComponent：JSON 里的 {}"[] 被系统再编码一层的话，
-    // 脚本那边解一次还剩 %7B，JSON.parse 当场失败，数据就静默没了。
-    var json = JSON.stringify(recent)
+    // 载荷必须是纯 ASCII。中文（待办内容、倒数日名字）走 base64 之后，
+    // 脚本那边怎么解回 UTF-8 是不确定的，解错就 JSON.parse 失败、整批丢——
+    // 而「切状态存得住、待办和倒数日存不住」正是这个：状态 id 是 study 这种纯字母，
+    // 一旦日志里混进中文，之后每一批都带着它，批批失败。
+    // 先把非 ASCII 转成 \\uXXXX，JSON.parse 会自己还原成中文。
+    // 载荷必须是纯 ASCII。中文（待办内容、倒数日名字）走 base64 之后，
+    // 脚本那边解回 UTF-8 是不是对的没法保证，解错就 JSON.parse 失败、整批丢——
+    // 「切状态存得住、待办和倒数日存不住」正是这个：状态 id 是 study 这种纯字母，
+    // 一旦日志里混进中文，之后每一批都带着它，批批失败。
+    // 先把非 ASCII 转成 JSON 的转义写法（JSON.parse 会自己还原成中文）。
+    // 这里一个反斜杠都不直接写：模板字符串会吞掉一层，写出来就是坏的。
+    var BS = String.fromCharCode(92)
+    var NONASCII = new RegExp("[" + String.fromCharCode(128) + "-"
+      + String.fromCharCode(65535) + "]", "g")
+    var json = JSON.stringify(recent).replace(NONASCII, function (c) {
+      return BS + "u" + ("000" + c.charCodeAt(0).toString(16)).slice(-4)
+    })
     // 用 split/join 不用正则：模板字符串会把 \\+ 这种转义吞掉一层，
     // 写出来就成了 /+/g，非法正则，整个页面当场挂掉
     var b64 = btoa(unescape(encodeURIComponent(json)))

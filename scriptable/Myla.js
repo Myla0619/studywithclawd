@@ -82,11 +82,17 @@ if (incoming) {
   await selfUpdate(false)
   // 上次可能留着没落盘的操作（点了东西然后被杀），先捞回来
   await drainPending()
-  // 主界面永远是 UITable：onSelect 就是脚本代码，点一下当场 C.save，
-  // 中间不经过网页。用户实测网页到脚本的通道一次都没送达过——切状态、待办、
-  // 倒数日全丢——所以凡是会改数据的操作都放在这边。
-  // 网页那套好看的界面降级成查看器（圆盘 + 统计），里面没有能改东西的地方。
-  await showTable()
+  // 默认是网页那套好看的界面。
+  //
+  // 一度以为「网页到脚本」这条路整个不通，把所有编辑都搬回了 UITable。
+  // 后来用户指出关键事实：圆盘好看那版**切状态是存得住的**，只有待办和倒数日不行。
+  // 差别是后两者带中文——非 ASCII 走 base64 之后脚本那边解不回来，JSON.parse
+  // 失败整批丢，而且一旦日志里混进一条中文，之后每一批都带着它，批批失败。
+  // 载荷改成纯 ASCII 之后这条路是通的。
+  //
+  // 简易模式（UITable，点一下当场存盘）留着当保险，在「别的」里开。
+  if (data.simpleMode) await showTable()
+  else await runApp()
 }
 Script.complete()
 
@@ -773,7 +779,7 @@ function payload() {
   return {
     version: C.VERSION,
     sid: SID,
-    viewOnly: true,      // 网页现在只负责看：圆盘和统计。会改数据的都在脚本那边。
+    viewOnly: !!data.simpleMode,   // 简易模式下网页只负责看，改数据在 UITable 那边
     pending: (data.pendingUpdate && data.pendingUpdate > C.VERSION) ? data.pendingUpdate : null,
     sub: `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`,
     warn: data.loadFailed
