@@ -283,6 +283,9 @@ function draw() {
   for (var i = 0; i < names.length; i++) {
     document.getElementById("tab-" + names[i]).className = names[i] === S.tab ? "on" : ""
   }
+  // 只读模式：会改数据的入口一概不显示。看起来能点、点了不生效才是最坑的。
+  var more = document.getElementById("tab-more")
+  if (P.viewOnly && more) more.style.display = "none"
   var v = document.getElementById("view")
   v.innerHTML = S.tab === "today" ? viewToday() : S.tab === "stats" ? viewStats() : viewMore()
   var sh = document.getElementById("sheet")

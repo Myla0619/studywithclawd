@@ -67,7 +67,7 @@ function makePageReal(wv) {
   const js = html.slice(html.indexOf("<script>") + 8, html.lastIndexOf("</script>"))
 
   const els = {}
-  const mkEl = () => ({ value: "", textContent: "", innerHTML: "", className: "",
+  const mkEl = () => ({ value: "", textContent: "", innerHTML: "", className: "", style: {},
                         focus() {}, select() {}, insertAdjacentHTML() {} })
   const document = {
     getElementById: id => (els[id] || (els[id] = mkEl())),
@@ -187,14 +187,19 @@ class UITable {
   }
 }
 
+let ALERT_INPUT = []          // 弹窗里要填的内容
+let ALERT_PICK = 0            // 点第几个按钮（-1 = 取消）
 class Alert {
-  constructor() { this.actions = [] }
+  constructor() { this.actions = [] ; this.fields = [] }
   addAction(t) { this.actions.push(t) }
-  addCancelAction(t) { this.actions.push(t) }
+  addCancelAction(t) { this.cancel = t }
   addDestructiveAction(t) { this.actions.push(t) }
-  addTextField() {}
-  textFieldValue() { return "" }
-  async present() { alerts.push((this.title || "") + " | " + (this.message || "")); return 0 }
+  addTextField(ph, v) { this.fields.push(v === undefined ? "" : v) }
+  textFieldValue(i) { return ALERT_INPUT[i] !== undefined ? ALERT_INPUT[i] : this.fields[i] }
+  async present() {
+    alerts.push((this.title || "") + " | " + (this.message || ""))
+    return ALERT_PICK
+  }
 }
 class Notification {
   constructor() {}
@@ -262,7 +267,6 @@ await runMyla("① 第一次用（没有任何数据）", {})
 const C = readModule("MylaCore.js")
 const tk = C.dayKey()
 
-// 点某一行
 async function tapRow(table, text) {
   for (const r of table.rows) {
     if (r.text.indexOf(text) >= 0 && r.onSelect) { await r.onSelect(); return true }
@@ -270,105 +274,56 @@ async function tapRow(table, text) {
   throw new Error("界面上找不到「" + text + "」这一行")
 }
 
+// 会改数据的操作现在全在 UITable 里，点一下脚本当场存盘，中间不经过网页。
 disk = {}; store = {}
-await runMyla("② 默认（网页界面）点三下再关掉", { actions: actionsIn() })
+await runMyla("② 点「学习」", { taps: async t => { await tapRow(t, "学习") } })
 let d = C.load()
-console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
-  + " ｜ 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
-if (!(d.days[tk] || []).some(s => s.a === "study")) {
-  console.log("     ❌ 没存下来"); process.exit(1)
-}
-
-// 简易模式：主界面是 UITable，点一行脚本当场存盘，中间不经过网页
-disk = {}; store = {}
-disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
-await runMyla("②b 简易模式点「学习」（当场存盘）", {
-  taps: async t => { await tapRow(t, "学习") }
-})
-d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">"))
-if (!(d.days[tk] || []).some(s => s.a === "study")) {
-  console.log("     ❌ 点了学习但没存下来"); process.exit(1)
-}
-console.log("     ✓ 点一下就存住了（不经过网页）")
+if (!(d.days[tk] || []).some(s => s.a === "study")) { console.log("     ❌ 没存下来"); process.exit(1) }
 
-// ③ 上划杀进程：只有 localStorage 留下来，下次启动应该捞回来
-disk = {}; store = {}
-const before = JSON.stringify(disk)
-SCENARIO = { actions: actionsIn() }
-;(function killApp() {
-  // 页面写了 localStorage，但脚本那边一行落盘代码都没跑（进程被杀）
-  const LOG = [
-    { i: 0, sid: "killed-session", t: "switch", v: "study", at: Date.now() },
-    { i: 1, sid: "killed-session", t: "todo.add", v: "被杀之前加的", v2: "n9", at: Date.now() }
-  ]
-  store["myla_pending"] = JSON.stringify(LOG)
-})()
-await runMyla("③ 上划杀进程后再打开（网页里的残留捞回来）", {})
+ALERT_INPUT = ["写周报"]; ALERT_PICK = 0
+await runMyla("③ 加一条待办", { taps: async t => { await tapRow(t, "加一条") } })
 d = C.load()
-console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
-  + " ｜ 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
-console.log("     → 残留清掉了吗：" + (store["myla_pending"] ? "❌ 还在" : "清了 ✓"))
+console.log("     → 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
+if (!(d.todos[tk] || []).length) { console.log("     ❌ 待办没存下来"); process.exit(1) }
 
-// ④ 再打开一次，不该重复执行
-await runMyla("④ 紧接着再打开一次", {})
-d = C.load()
-console.log("     → 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空")
-  + "（不该变多）")
-
-// ⑤ 最关键的一种：只有实时拦截那条通道能用（第②④条不工作、localStorage 也没有）。
-// 用户的情况就是这样——他上划退出，关窗口后的通道根本跑不到。
-disk = {}; store = {}
-await runMyla("⑤ 网页里操作、只有实时拦截那条通道能用", {
-  taps: async t => { await tapRow(t, "看圆盘") },
-  actions: actionsIn(), noEval: true, noStorage: true
-})
-d = C.load()
-const only = (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
-const onlyTodo = (d.todos[tk] || []).map(x => x.text).join("、") || "空"
-console.log("     → 段：" + only + " ｜ 清单：" + onlyTodo)
-if (only.indexOf("学习") < 0 || onlyTodo === "空") {
-  console.log("     ❌ 只靠实时通道存不下来")
-  process.exit(1)
-}
-console.log("     ✓ 只靠这一条也存住了")
-
-// ⑥ 倒数日：走页面里真实的 cdSave()
-disk = {}; store = {}
-await runMyla("⑥ 网页里记一个倒数日", {
-  actions: page => {
-    page.doc.getElementById("cdName").value = "论文 deadline"
-    page.doc.getElementById("cdDate").value = "2026-08-30"
-    // 真实调用页面的保存函数（它内部会 log + flush）
-    page.cdSave()
-  }
-})
+ALERT_INPUT = ["论文 deadline", "2026-08-30"]; ALERT_PICK = 0
+await runMyla("④ 记一个倒数日", { taps: async t => { await tapRow(t, "记一个日子") } })
 d = C.load()
 console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name + " " + c.date).join("、") || "空"))
-if (!(d.countdowns || []).length) {
-  console.log("     ❌ 倒数日没存下来")
-  if (d.lastChannelError) console.log("     通道报的错：" + d.lastChannelError)
-  process.exit(1)
-}
-console.log("     ✓ 存住了")
+if (!(d.countdowns || []).length) { console.log("     ❌ 倒数日没存下来"); process.exit(1) }
 
-// ⑦ 用户的真实情况：myladay:// 跳转一次都送不到、关窗口后也读不了，
-// 只有 localStorage 活着。上划退出之后下次打开必须能捞回来。
-disk = {}; store = {}
-await runMyla("⑦ 只有 localStorage 活着（记倒数日后上划退出）", {
-  actions: page => {
-    page.doc.getElementById("cdName").value = "论文 deadline"
-    page.doc.getElementById("cdDate").value = "2026-08-30"
-    page.cdSave()
-  },
-  noSar: true, noEval: true
-})
-console.log("     → 被杀之前文件里：" + ((C.load().countdowns || []).length) + " 个倒数日")
-await runMyla("   再打开一次（应该捞回来）", { noSar: true, noEval: true })
+ALERT_INPUT = ["论文答辩", "2026-09-01"]; ALERT_PICK = 0
+await runMyla("⑤ 改那个倒数日", { taps: async t => { await tapRow(t, "论文 deadline") } })
 d = C.load()
-console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name).join("、") || "空"))
-if (!(d.countdowns || []).length) { console.log("     ❌ 没捞回来"); process.exit(1) }
-console.log("     ✓ 捞回来了")
+console.log("     → 改完：" + (d.countdowns || []).map(c => c.name + " " + c.date).join("、"))
+if ((d.countdowns[0] || {}).name !== "论文答辩") { console.log("     ❌ 没改上"); process.exit(1) }
+
+ALERT_PICK = 2                       // 删掉
+await runMyla("⑥ 删掉它", { taps: async t => { await tapRow(t, "论文答辩") } })
+d = C.load()
+console.log("     → 剩下：" + ((d.countdowns || []).length) + " 个")
+if ((d.countdowns || []).length) { console.log("     ❌ 没删掉"); process.exit(1) }
+ALERT_PICK = 0; ALERT_INPUT = []
+
+// 网页现在只负责看，里面不改数据，所以打开它不该影响任何东西
+const beforeWeb = fs.existsSync ? JSON.stringify(C.load().days) : ""
+await runMyla("⑦ 打开网页看圆盘（只读）", { taps: async t => { await tapRow(t, "看圆盘") } })
+d = C.load()
+console.log("     → 打开前后数据一样吗：" +
+  (JSON.stringify(d.days) === beforeWeb ? "一样 ✓" : "❌ 变了"))
+
+// 上一版留在浏览器里没落盘的东西，仍然要能捞回来
+disk = {}; store = {}
+store["myla_pending"] = JSON.stringify([
+  { i: 0, sid: "old-session", t: "switch", v: "study", at: Date.now() },
+  { i: 1, sid: "old-session", t: "todo.add", v: "网页里加的", v2: "n9", at: Date.now() }
+])
+await runMyla("⑧ 网页里的残留照样捞回来", {})
+d = C.load()
+console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">")
+  + " ｜ 清单：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
+if (!(d.todos[tk] || []).length) { console.log("     ❌ 残留没捞回来"); process.exit(1) }
 
 console.log("\n弹过的窗：" + (alerts.filter(Boolean).join(" / ") || "（没有）"))
 console.log("\n全部跑通 ✅")

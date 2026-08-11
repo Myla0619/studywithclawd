@@ -21,6 +21,7 @@ const C = importModule("MylaCore")
 const V = importModule("MylaView")
 
 const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+const WEEK_S = ["日", "一", "二", "三", "四", "五", "六"]
 
 /** 这一次运行的编号。操作按「会话号 + 序号」去重，跨会话也不会重复执行。
  *  必须声明在入口代码之前——const 在自己那行执行之前碰不得，而入口那段就会调用 runApp。 */
@@ -81,11 +82,11 @@ if (incoming) {
   await selfUpdate(false)
   // 上次可能留着没落盘的操作（点了东西然后被杀），先捞回来
   await drainPending()
-  // 默认是网页那套好看的界面。简易模式是 UITable：点一下脚本当场存盘，
-  // 中间不经过网页，是验证过最稳的一条。万一网页那边又出问题，
-  // 在「别的」里一键切过来，不用等我发版。
-  if (data.simpleMode) await showTable()
-  else await runApp()
+  // 主界面永远是 UITable：onSelect 就是脚本代码，点一下当场 C.save，
+  // 中间不经过网页。用户实测网页到脚本的通道一次都没送达过——切状态、待办、
+  // 倒数日全丢——所以凡是会改数据的操作都放在这边。
+  // 网页那套好看的界面降级成查看器（圆盘 + 统计），里面没有能改东西的地方。
+  await showTable()
 }
 Script.complete()
 
@@ -186,18 +187,151 @@ function drawTable(t) {
     drawTable(t); t.reload()
   })
 
+  head(t, "倒数日")
+  const cds = C.sortedCountdowns(data, now)
+  if (!cds.length) note(t, "还没有记着的日子")
+  for (const it of cds) {
+    const r = new UITableRow()
+    r.dismissOnSelect = false
+    r.height = 52
+    const dot = r.addText("●")
+    dot.titleColor = new Color(it.cd.hex || "#F566AD")
+    dot.titleFont = Font.systemFont(15); dot.widthWeight = 10
+    const c = r.addText(it.cd.name, dateLine(it))
+    c.titleColor = INK(it.days < 0 ? 0.45 : 1); c.titleFont = Font.systemFont(17)
+    c.subtitleColor = INK(0.4); c.subtitleFont = Font.systemFont(12)
+    c.widthWeight = 62
+    const d = r.addText(it.days === 0 ? "今天" : Math.abs(it.days) + " 天")
+    d.rightAligned(); d.widthWeight = 28
+    d.titleColor = INK(it.days < 0 ? 0.3 : 0.75)
+    d.titleFont = Font.boldSystemFont(16)
+    r.onSelect = async () => { await editCountdown(it.cd); drawTable(t); t.reload() }
+    t.addRow(r)
+  }
+  action(t, "＋ 记一个日子", "#7DD73C", async () => {
+    await editCountdown(null); drawTable(t); t.reload()
+  })
+
   head(t, "别的")
-  action(t, "看圆盘 / 统计 / 倒数日", null, async () => {
+  action(t, "看圆盘 / 统计", null, async () => {
     await runApp()
     drawTable(t); t.reload()
   })
-  action(t, "换回好看的界面", null, async () => {
-    data.simpleMode = false
-    persist("切界面")
-    await runApp()
-    drawTable(t); t.reload()
+  action(t, "管理状态", null, async () => { await manageActs(); drawTable(t); t.reload() })
+  action(t, "定时问一句 · " + (data.nudgeMinutes === 0 ? "关着"
+    : (data.nudgeMinutes || 90) + " 分钟"), null, async () => {
+    await setNudge(); drawTable(t); t.reload()
+  })
+  action(t, "导出一份备份", null, async () => {
+    try { await DocumentPicker.exportFile(C.DATA) } catch (e) {}
   })
   note(t, "版本 " + C.VERSION + (data.pendingUpdate ? " · 已下好 " + data.pendingUpdate : ""))
+}
+
+function dateLine(it) {
+  const d = it.when
+  return (it.days < 0 ? "已过 · " : "") + (d.getMonth() + 1) + "月" + d.getDate() + "日 周"
+    + WEEK_S[d.getDay()] + (it.cd.yearly ? " · 每年" : "")
+}
+
+/** 记 / 改一个日子。走 Alert，存盘是脚本当场做的。 */
+async function editCountdown(cd) {
+  const al = new Alert()
+  al.title = cd ? cd.name : "记一个日子"
+  al.message = "日期写成 2026-12-25 这样。每年重复的（生日、纪念日）过完自动滚到明年。"
+  al.addTextField("叫什么", cd ? cd.name : "")
+  al.addTextField("日期 2026-12-25", cd ? cd.date : "")
+  al.addAction(cd ? "改好了" : "记下")
+  al.addAction((cd && cd.yearly ? "关掉" : "开启") + "每年重复")
+  if (cd) al.addDestructiveAction("删掉")
+  al.addCancelAction("取消")
+  const i = await al.present()
+  if (i < 0) return
+
+  if (cd && i === 2) { data.countdowns = data.countdowns.filter(x => x.id !== cd.id)
+    persist("删倒数日"); return }
+
+  const name = (al.textFieldValue(0) || "").trim()
+  const date = (al.textFieldValue(1) || "").trim()
+  if (i <= 1 && (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+    const bad = new Alert()
+    bad.title = "没记下"
+    bad.message = !name ? "名字不能空" : "日期要写成 2026-12-25 这样"
+    bad.addAction("好")
+    await bad.present()
+    return
+  }
+  const yearly = i === 1 ? !(cd && cd.yearly) : !!(cd && cd.yearly)
+  if (cd) { cd.name = name; cd.date = date; cd.yearly = yearly }
+  else {
+    const used = data.countdowns.map(x => x.hex)
+    const hex = C.CD_PALETTE.find(h => used.indexOf(h) < 0)
+      || C.CD_PALETTE[data.countdowns.length % C.CD_PALETTE.length]
+    data.countdowns.push({ id: uid(), name, date, yearly, hex })
+  }
+  persist(cd ? "改倒数日" : "加倒数日")
+}
+
+/** 管理状态：改名、删、加。 */
+async function manageActs() {
+  const t = new UITable()
+  const redraw = () => {
+    t.removeAllRows()
+    head(t, "点一个改名或删掉")
+    for (const a of data.activities) {
+      const r = new UITableRow()
+      r.dismissOnSelect = false
+      r.height = 46
+      const c = r.addText(a.name)
+      c.titleColor = new Color(a.hex); c.titleFont = Font.systemFont(17)
+      r.onSelect = async () => {
+        const al = new Alert()
+        al.title = a.name
+        al.addTextField("名字", a.name)
+        al.addAction("改名"); al.addDestructiveAction("删掉"); al.addCancelAction("取消")
+        const k = await al.present()
+        if (k === 0) { a.name = (al.textFieldValue(0) || "").trim() || a.name; persist("改状态名") }
+        if (k === 1) {
+          // 只从能选的里拿掉，已经记下的时段不动
+          data.activities = data.activities.filter(x => x.id !== a.id)
+          persist("删状态")
+        }
+        redraw(); t.reload()
+      }
+      t.addRow(r)
+    }
+    action(t, "＋ 加一个", "#7DD73C", async () => {
+      const al = new Alert()
+      al.title = "新状态"
+      al.addTextField("比如「实习」", "")
+      al.addAction("加上"); al.addCancelAction("取消")
+      if (await al.present() < 0) return
+      const v = (al.textFieldValue(0) || "").trim()
+      if (!v) return
+      const pal = C.DEFAULT_ACTIVITIES.map(x => x.hex)
+      data.activities.push({ id: "c" + uid().slice(0, 6), name: v,
+        hex: pal[data.activities.length % pal.length] })
+      persist("加状态")
+      redraw(); t.reload()
+    })
+  }
+  redraw()
+  await t.present(true)
+}
+
+async function setNudge() {
+  const a = new Alert()
+  a.title = "隔多久问一次？"
+  a.message = "超过这个时长没换状态，就推一条通知，通知上直接能改。"
+  const opts = [45, 60, 90, 120, 180]
+  for (const m of opts) a.addAction(m + " 分钟")
+  a.addDestructiveAction("关掉提醒")
+  a.addCancelAction("取消")
+  const i = await a.present()
+  if (i < 0) return
+  data.nudgeMinutes = i === opts.length ? 0 : opts[i]
+  persist("改提醒间隔")
+  scheduleNudge()
 }
 
 function head(t, text) {
@@ -639,6 +773,7 @@ function payload() {
   return {
     version: C.VERSION,
     sid: SID,
+    viewOnly: true,      // 网页现在只负责看：圆盘和统计。会改数据的都在脚本那边。
     pending: (data.pendingUpdate && data.pendingUpdate > C.VERSION) ? data.pendingUpdate : null,
     sub: `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`,
     warn: data.loadFailed
