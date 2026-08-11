@@ -32,16 +32,23 @@ const incoming = fromURL || fromShortcut
 
 if (incoming) {
   const hit = data.activities.find(a => a.id === incoming || a.name === incoming)
+  let r = { ok: false, why: `没有叫「${incoming}」的状态` }
   if (hit) {
-    data = C.switchTo(data, hit.id)
-    data.lastAuto = { why: fromURL ? "从通知里改的" : "自动化触发", at: Date.now() }
+    // 通知按钮是你自己按的，算手动；快捷指令自动化才走保护
+    if (fromURL) { data = C.switchTo(data, hit.id, Date.now(), "me"); r = { ok: true } }
+    else r = C.autoSwitch(data, hit.id)
+    data.lastAuto = {
+      name: hit.name, ok: r.ok, why: r.why || "",
+      from: fromURL ? "通知按钮" : "自动化", at: Date.now()
+    }
     C.save(data)
-    scheduleNudge()
+    if (r.ok) scheduleNudge()
   }
   if (!config.runsInApp) Script.complete()
   else {
     const a = new Alert()
-    a.title = hit ? `切成「${hit.name}」了` : `没有叫「${incoming}」的状态`
+    a.title = r.ok ? `切成「${hit.name}」了` : "没有切"
+    if (!r.ok) a.message = r.why
     a.addAction("好")
     await a.present()
   }
@@ -89,7 +96,7 @@ function apply(m) {
   switch (m.t) {
     case "switch":
       // 用操作当时的时间，不是现在
-      data = C.switchTo(data, m.v, m.at)
+      data = C.switchTo(data, m.v, m.at, "me")
       break
 
     case "todo.add":
@@ -142,6 +149,15 @@ function apply(m) {
       break
 
     case "nudge": data.nudgeMinutes = m.v; break
+    case "autoGrace": data.autoGrace = m.v; break
+
+    case "seg.retag": {
+      // m.v 是那一段的起点秒数（页面里新开的段 id 是页面自己编的，对不上）
+      const dk = C.dayKey(new Date(m.v * 1000))
+      const seg = (data.days[dk] || []).find(s => s.s === m.v)
+      if (seg) { seg.a = m.v2; seg.by = "me" }
+      break
+    }
 
     case "cd.add":
       // 颜色用页面挑好的那个，别在这儿再算一遍——算法一旦分叉两边就对不上
@@ -214,7 +230,7 @@ function payload() {
       id: c.id, name: c.name, date: c.date, yearly: !!c.yearly, hex: c.hex
     })),
     clawd: clawdSet(),
-    segs: segs.map(s => ({ id: s.id, a: s.a, s: s.s, e: s.e })),
+    segs: segs.map(s => ({ id: s.id, a: s.a, s: s.s, e: s.e, by: s.by || "me" })),
     dayStart: Math.floor(C.startOfDay().getTime() / 1000),
     days,
     todos: (data.todos[C.dayKey()] || []).map(x => ({
@@ -222,6 +238,8 @@ function payload() {
     })),
     carry: (data.todos[C.dayKey(new Date(now - 86400000))] || []).filter(x => !x.done).length,
     nudge: data.nudgeMinutes === 0 ? 0 : (data.nudgeMinutes || 90),
+    autoGrace: data.autoGrace === undefined ? 30 : data.autoGrace,
+    lastAuto: (data.lastAuto && Date.now() - data.lastAuto.at < 6 * 3600000) ? data.lastAuto : null,
     span: data.ui.span || 7,
     chart: data.ui.chart || "bar"
   }

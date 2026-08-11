@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-0109"
+const VERSION = "20260812-0119"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
@@ -65,6 +65,7 @@ function migrate(d) {
   if (!d.days) d.days = {}
   if (!d.todos) d.todos = {}          // { "2026-08-11": [{id, text, done, doneAt}] }
   if (!d.countdowns) d.countdowns = [] // [{id, name, date:"2026-12-25", yearly, hex}]
+  if (d.autoGrace === undefined) d.autoGrace = 30   // 自动切换多久内不许覆盖手动的；0=不保护，-1=完全拒绝
   if (!d.ui) d.ui = { span: 7, chart: "bar" }
   d.v = SCHEMA
   return d
@@ -123,8 +124,9 @@ function rollover(data) {
   return data
 }
 
-/** 切状态：关掉当前那段，从这一刻开新的。24 小时不留空档。 */
-function switchTo(data, activityID, when) {
+/** 切状态：关掉当前那段，从这一刻开新的。24 小时不留空档。
+ *  by: "me" 手动点的 / "auto" 自动化或通知按钮切的。记下来是为了让自动的不许压手动的。 */
+function switchTo(data, activityID, when, by) {
   const t = Math.floor((when || Date.now()) / 1000)
   rollover(data)
   const key = dayKey(new Date(t * 1000))
@@ -134,8 +136,30 @@ function switchTo(data, activityID, when) {
     if (open.a === activityID) return data      // 已经在这个状态了
     open.e = t
   }
-  segs.push({ id: uid(), a: activityID, s: t, e: null })
+  segs.push({ id: uid(), a: activityID, s: t, e: null, by: by || "me" })
   return data
+}
+
+/**
+ * 自动切换（快捷指令到达某地、通知按钮）。手动优先：你刚亲手设的状态，
+ * 自动化在保护期内不许改掉。
+ *
+ * 地理围栏会反复触发（进出边界抖一下就是一次），原来没有这个保护，
+ * 于是「手动设成学习 → 围栏触发休息 → 学习那段被截断」，一天下来全是休息。
+ */
+function autoSwitch(data, activityID, when, graceMin) {
+  const t = Math.floor((when || Date.now()) / 1000)
+  const grace = graceMin === undefined ? (data.autoGrace === undefined ? 30 : data.autoGrace) : graceMin
+  if (grace < 0) return { ok: false, why: "你把自动切换关掉了" }
+
+  const open = openSegment(segments(data, dayKey(new Date(t * 1000))))
+  if (open && open.a === activityID) return { ok: false, why: "已经是这个状态了" }
+  if (open && open.by !== "auto" && grace > 0 && (t - open.s) < grace * 60) {
+    const mins = Math.max(1, Math.round((t - open.s) / 60))
+    return { ok: false, why: `你 ${mins} 分钟前刚手动设成「${activityOf(data, open.a).name}」，没动它` }
+  }
+  switchTo(data, activityID, when, "auto")
+  return { ok: true }
 }
 
 /** 把一段从 when 切两半，后半段换成别的状态。用来修忘了切的时段。 */
@@ -667,7 +691,7 @@ function shadeHex(hex) {
 
 module.exports = {
   VERSION, DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
-  switchTo, splitSegment, duration, totals, hhmm, clock, activityOf,
+  switchTo, autoSwitch, splitSegment, duration, totals, hhmm, clock, activityOf,
   drawDial, drawDonut, drawClawd, drawCountdowns, untilDays, sortedCountdowns,
   CD_PALETTE, DEFAULT_ACTIVITIES, DATA
 }

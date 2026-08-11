@@ -279,6 +279,15 @@ function viewToday() {
   for (var k in t) acc += t[k]
 
   var h = ""
+  if (P.lastAuto) {
+    var la = P.lastAuto
+    h += '<div class="warn" style="background:' + (la.ok ? "#40BBE7" : "#7DD73C") + '22;color:'
+      + (la.ok ? "#40BBE7" : "#7DD73C") + '">'
+      + (la.ok
+          ? la.from + '把你切成了「' + esc(la.name) + '」'
+          : la.from + '想切成「' + esc(la.name) + '」，' + esc(la.why))
+      + '</div>'
+  }
   if (P.warn) {
     h += '<div class="warn" style="background:' + P.warn.hex + '22;color:' + P.warn.hex + '">'
       + esc(P.warn.text) + '</div>'
@@ -540,13 +549,14 @@ function showDetail(id) {
     + '</div>'
 
   var mine = P.segs.filter(function (s) { return s.a === id })
-  h += '<div class="card"><h2>今天的时段（点一段可以拆开）</h2>'
+  h += '<div class="card"><h2>今天的时段（点一段可以改）</h2>'
   if (!mine.length) h += '<div class="empty">今天还没有</div>'
   for (var j = 0; j < mine.length; j++) {
     var s2 = mine[j]
-    h += '<div class="row" onclick="askSplit(\\'' + s2.id + '\\')">'
+    h += '<div class="row" onclick="segMenu(\\'' + s2.id + '\\')">'
       + '<span class="n" style="color:' + a.hex + '">' + clock(s2.s) + ' – '
       + (s2.e == null ? "现在" : clock(s2.e)) + '</span>'
+      + (s2.by === "auto" ? '<span class="p" style="width:auto">自动</span>' : "")
       + '<span class="v">' + hhmm((s2.e == null ? nowSec() : s2.e) - s2.s) + '</span></div>'
   }
   S.sheet = h + '</div>'
@@ -554,6 +564,42 @@ function showDetail(id) {
 }
 function stat(k, v) {
   return '<div class="stat"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'
+}
+
+// ---------------------------------------------------------------- 改某一段
+function segMenu(segID) {
+  var seg = null
+  for (var i = 0; i < P.segs.length; i++) if (P.segs[i].id === segID) seg = P.segs[i]
+  if (!seg) return
+  S.pending = segID
+  S.sheet = '<h3>' + clock(seg.s) + ' – ' + (seg.e == null ? "现在" : clock(seg.e)) + '</h3>'
+    + '<div class="tip">现在记的是「' + esc(actOf(seg.a).name) + '」'
+    + (seg.by === "auto" ? '，是自动化切的' : "") + '。</div>'
+    + '<div class="card">'
+    + '<div class="link" onclick="retagMenu()"><span>整段改成别的状态</span><span class="h">›</span></div>'
+    + '<div class="link" onclick="askSplit(\\'' + segID + '\\')">'
+    + '<span>从中间拆成两段</span><span class="h">中途换过 ›</span></div>'
+    + '</div>'
+  draw()
+}
+function retagMenu() {
+  var h = '<h3>这一段其实是</h3><div class="card">'
+  for (var i = 0; i < P.activities.length; i++) {
+    var a = P.activities[i]
+    h += '<div class="link" onclick="doRetag(\\'' + a.id + '\\')">'
+      + '<span style="color:' + a.hex + '">' + esc(a.name) + '</span><span></span></div>'
+  }
+  S.sheet = h + '</div>'
+  draw()
+}
+function doRetag(id) {
+  for (var i = 0; i < P.segs.length; i++) if (P.segs[i].id === S.pending) {
+    log("seg.retag", P.segs[i].s, id)
+    P.segs[i].a = id
+    P.segs[i].by = "me"
+  }
+  S.pending = null; S.sheet = null
+  draw()
 }
 
 // ---------------------------------------------------------------- 拆分
@@ -690,6 +736,23 @@ function nudge() {
   S.sheet = h + '</div>'
   draw()
 }
+function autoSet() {
+  var opts = [[15, "保护 15 分钟"], [30, "保护 30 分钟"], [60, "保护 1 小时"]]
+  var h = '<h3>自动切换</h3>'
+    + '<div class="tip">快捷指令的地点自动化会反复触发（在围栏边上走两步就是一次）。'
+    + '保护期内，你亲手设的状态不会被自动化改掉——它会跳过并在首页告诉你。</div><div class="card">'
+  for (var i = 0; i < opts.length; i++) {
+    h += '<div class="link" onclick="setAuto(' + opts[i][0] + ')"><span>' + opts[i][1] + '</span>'
+      + '<span class="h">' + (P.autoGrace === opts[i][0] ? "现在是这个" : "") + '</span></div>'
+  }
+  h += '<div class="link" onclick="setAuto(0)"><span>不保护</span>'
+    + '<span class="h">' + (P.autoGrace === 0 ? "现在是这个" : "自动化说了算") + '</span></div>'
+  h += '<div class="link" style="color:#F2363C" onclick="setAuto(-1)"><span>完全不接受自动切换</span>'
+    + '<span class="h">' + (P.autoGrace < 0 ? "现在是这个" : "") + '</span></div>'
+  S.sheet = h + '</div>'
+  draw()
+}
+function setAuto(v) { P.autoGrace = v; log("autoGrace", v); S.sheet = null; draw() }
 function setNudge(v) { P.nudge = v; log("nudge", v); S.sheet = null; draw() }
 function wantExport() {
   log("export")
