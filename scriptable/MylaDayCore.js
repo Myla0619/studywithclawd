@@ -135,7 +135,7 @@ function activityOf(data, id) {
 // ---------------------------------------------------------------- 绘制
 
 /** 圆环上一段扇形。角度用「一天的比例」表示，0 = 零点在正上方，顺时针。 */
-function ringSlice(ctx, cx, cy, rIn, rOut, t0, t1, color) {
+function ringSlice(ctx, cx, cy, rIn, rOut, t0, t1, color, alpha) {
   const steps = Math.max(2, Math.ceil((t1 - t0) * 240))
   const pts = []
   const at = (t, r) => {
@@ -148,7 +148,7 @@ function ringSlice(ctx, cx, cy, rIn, rOut, t0, t1, color) {
   p.addLines(pts)
   p.closeSubpath()
   ctx.addPath(p)
-  ctx.setFillColor(new Color(color))
+  ctx.setFillColor(alpha === undefined ? new Color(color) : new Color(color, alpha))
   ctx.fillPath()
 }
 
@@ -171,7 +171,7 @@ function drawDial(data, segs, size, opts) {
   const turn = s => Math.min(1, Math.max(0, (s - dayStart) / 86400))
 
   // 还没到的时间：一圈暗轨道
-  ringSlice(ctx, cx, cy, rIn, rOut, 0, 1, "#FFFFFF12")
+  ringSlice(ctx, cx, cy, rIn, rOut, 0, 1, "#FFFFFF", 0.07)
 
   for (const seg of segs) {
     const t0 = turn(seg.s)

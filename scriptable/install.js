@@ -4,7 +4,7 @@
 // 无论成功失败都会弹窗说明——上一版什么都不显示，跑完一片安静，
 // 分不清是装好了还是没反应。
 
-const FILES = ["MylaDayCore.js", "MylaDay.js", "MylaDayWidget.js"]
+const FILES = ["MylaDayCore.js", "MylaDay.js", "MylaDayWidget.js", "Diag.js"]
 const SOURCES = [
   ["GitHub", "https://raw.githubusercontent.com/Myla0619/studywithclawd/main/scriptable/"],
   ["jsDelivr 镜像", "https://cdn.jsdelivr.net/gh/Myla0619/studywithclawd@main/scriptable/"]
