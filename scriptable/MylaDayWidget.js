@@ -19,11 +19,11 @@ w.url = "scriptable:///run?scriptName=MylaDay"
 const family = config.widgetFamily || "medium"
 
 if (family === "small") {
-  w.addImage(C.drawDial(data, segs, 150, { now, ticks: false })).centerAlignedImage()
+  w.addImage(C.drawDial(data, segs, 150, { now, ticks: false })).centerAlignImage()
 } else {
   const row = w.addStack()
   row.layoutHorizontally()
-  row.centerAlignVertically()
+  row.centerAlignContent()
 
   const left = row.addStack()
   left.addImage(C.drawDial(data, segs, 140, { now, ticks: false }))
@@ -45,7 +45,7 @@ if (family === "small") {
   for (const a of top) {
     const line = right.addStack()
     line.layoutHorizontally()
-    line.centerAlignVertically()
+    line.centerAlignContent()
     const dot = line.addText("●")
     dot.font = Font.systemFont(9)
     dot.textColor = new Color(a.hex)
