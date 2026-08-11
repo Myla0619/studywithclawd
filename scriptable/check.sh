@@ -77,6 +77,18 @@ if (orphans.length) { console.log("  ✗ 没人调：" + orphans.join("、")); p
 console.log("  ✓ 都有人调")
 ' || fail=1
 
+echo "── 端到端：把整个 Myla.js 真跑一遍"
+# 之前只抽单个函数出来测，所以「const SID 声明在入口之后」这种错一次都没拦住——
+# 语法全对、函数单测也全对，但整个文件一跑就 TDZ 报错。
+if node smoke.mjs > /tmp/_smoke.log 2>&1; then
+  sed -n 's/^/  /p' /tmp/_smoke.log | grep -E "✓|→" | head -12
+else
+  echo "  ✗ 跑不起来"
+  tail -12 /tmp/_smoke.log | sed 's/^/      /'
+  fail=1
+fi
+rm -f /tmp/_smoke.log
+
 echo
 [ $fail -eq 0 ] && echo "全过 ✅" || echo "有问题 ❌"
 exit $fail

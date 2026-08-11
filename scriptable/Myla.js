@@ -22,6 +22,10 @@ const V = importModule("MylaView")
 
 const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
 
+/** 这一次运行的编号。操作按「会话号 + 序号」去重，跨会话也不会重复执行。
+ *  必须声明在入口代码之前——const 在自己那行执行之前碰不得，而入口那段就会调用 runApp。 */
+const SID = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+
 const REPO = "Myla0619/studywithclawd"
 const UPDATE_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js",
                       "MylaWhy.js", "MylaTest.js"]
@@ -65,9 +69,6 @@ if (incoming) {
 Script.complete()
 
 // ---------------------------------------------------------------- 开窗口
-
-/** 这一次运行的编号。操作按「会话号 + 序号」去重，跨会话也不会重复执行。 */
-const SID = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 /** 这个会话已经执行到第几条了（-1 表示一条都没执行过）。 */
 function doneUpTo(sid) {
