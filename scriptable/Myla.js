@@ -50,6 +50,25 @@ const FALLBACK_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js"
 
 let data = C.rollover(C.load())
 
+// 正门：页面保存待办/倒数日时带着完整日志重启本脚本，这里直接写盘再重开界面。
+// 按会话号+序号去重（doneUpTo/markDone），拦截通道如果其实也送到了，不会重复执行。
+const doParam = (args.queryParameters && args.queryParameters.do) || ""
+if (doParam) {
+  try {
+    const batch = JSON.parse(decodePayload(doParam))
+    for (const m of batch) {
+      if (!m.sid || m.i === undefined || m.i <= doneUpTo(m.sid)) continue
+      markDone(m.sid, m.i)
+      if (m.t !== "export" && m.t !== "update") applySafe(m)
+    }
+  } catch (e) { data.lastChannelError = "正门: " + ((e && e.message) || e) }
+  C.save(data)
+  scheduleNudge()
+  await runApp()
+  Script.complete()
+  throw new Error("__done__")   // Script.complete 不中断执行，别让下面的入口再跑一遍
+}
+
 const fromShortcut = (args.shortcutParameter || "").toString().trim()
 const fromURL = (args.queryParameters && args.queryParameters.switchTo) || ""
 const incoming = fromURL || fromShortcut
@@ -82,16 +101,10 @@ if (incoming) {
   await selfUpdate(false)
   // 上次可能留着没落盘的操作（点了东西然后被杀），先捞回来
   await drainPending()
-  // 默认是网页那套好看的界面，能改数据。
-  //
-  // 网页版待办和倒数日存不住的原因是非 ASCII：中文走 base64 之后脚本那边解不回来，
-  // JSON.parse 失败整批丢。这个在 20260812-0337 修好了，但当时自动更新还是六小时
-  // 查一次，用户根本没更到；等更新间隔改短，我又把界面换成了 UITable。
-  // 所以「好看的界面 + 中文修复」这个组合他一次都没试过。换回来。
-  //
-  // 简易模式（UITable，点一下当场存盘）留在「别的」里当保险。
-  if (data.simpleMode) await showTable()
-  else await runApp()
+  // 定案，不再改：主界面是 UITable，所有写操作点一下当场 C.save——
+  // 这是从第一天起唯一从没丢过数据的路。网页只当查看器（看圆盘/统计），
+  // viewOnly，里面点不了任何会写的东西。用户测了一百次拍的板。
+  await showTable()
 }
 Script.complete()
 
@@ -817,7 +830,7 @@ function payload() {
   return {
     version: C.VERSION,
     sid: SID,
-    viewOnly: !!data.simpleMode,   // 简易模式下网页只负责看
+    viewOnly: true,   // 网页永远只负责看，写操作全在 UITable
     pending: (data.pendingUpdate && data.pendingUpdate > C.VERSION) ? data.pendingUpdate : null,
     sub: `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`,
     warn: data.loadFailed

@@ -278,52 +278,23 @@ async function tapRow(table, text) {
   throw new Error("界面上找不到「" + text + "」这一行")
 }
 
-// ---- 默认：网页界面，重点是中文的待办和倒数日
+// ---- 主界面 UITable，所有写操作直接存盘
 disk = {}; store = {}
-await runMyla("② 网页里切状态 + 中文待办 + 中文倒数日", {
-  actions: page => {
-    page.log("switch", "study")
-    page.log("todo.add", "把第三章的实验重跑一遍", "n1")
-    page.doc.getElementById("cdName").value = "论文 deadline · 中文"
-    page.doc.getElementById("cdDate").value = "2026-08-30"
-    page.cdSave()
-  },
-  noEval: true, noStorage: true          // 只留实时拦截那一条，最严苛
-})
-let w = C.load()
-console.log("     → 段：" + (w.days[tk] || []).map(s => C.activityOf(w, s.a).name).join(">")
-  + " ｜ 待办：" + ((w.todos[tk] || []).map(x => x.text).join("、") || "空")
-  + " ｜ 倒数日：" + ((w.countdowns || []).map(c => c.name).join("、") || "空"))
-if ((w.todos[tk] || [])[0] === undefined
-    || w.todos[tk][0].text !== "把第三章的实验重跑一遍") {
-  console.log("     ❌ 中文待办丢了或乱码"); process.exit(1)
-}
-if ((w.countdowns || [])[0] === undefined
-    || w.countdowns[0].name !== "论文 deadline · 中文") {
-  console.log("     ❌ 中文倒数日丢了或乱码"); process.exit(1)
-}
-console.log("     ✓ 中文原样存住了")
-
-// ---- 简易模式：UITable，需要弹窗的操作先关表再弹
-disk = {}; store = {}
-disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
-await runMyla("②b 简易模式点「学习」", { taps: async t => { await tapRow(t, "学习") } })
+await runMyla("② 点「学习」", { taps: async t => { await tapRow(t, "学习") } })
 let d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">"))
 if (!(d.days[tk] || []).some(s => s.a === "study")) { console.log("     ❌ 没存下来"); process.exit(1) }
 
-disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
 ALERT_INPUT = ["写周报"]; ALERT_PICK = 0
-await runMyla("③ 简易模式加中文待办（先关表再弹）", { taps: async t => { await tapRow(t, "加一条") } })
+await runMyla("③ 加中文待办（先关表再弹）", { taps: async t => { await tapRow(t, "加一条") } })
 d = C.load()
 console.log("     → 待办：" + ((d.todos[tk] || []).map(x => x.text).join("、") || "空"))
 if ((d.todos[tk] || [])[0] && (d.todos[tk] || [])[0].text !== "写周报") {
   console.log("     ❌ 中文乱了"); process.exit(1)
 }
 
-disk["/docs/myladay.json"] = JSON.stringify({ v: 1, days: {}, todos: {}, simpleMode: true })
 ALERT_INPUT = ["论文 deadline · 中文", "2026-08-30"]; ALERT_PICK = 0
-await runMyla("④ 简易模式记中文倒数日（先关表再弹）", { taps: async t => { await tapRow(t, "记一个日子") } })
+await runMyla("④ 记中文倒数日（先关表再弹）", { taps: async t => { await tapRow(t, "记一个日子") } })
 d = C.load()
 console.log("     → 倒数日：" + ((d.countdowns || []).map(c => c.name).join("、") || "空"))
 if ((d.countdowns || [])[0] === undefined

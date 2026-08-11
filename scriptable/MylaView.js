@@ -199,6 +199,7 @@ var CHARTS = [["柱状", "bar"], ["圆盘", "dial"]]
 function log(t, v, v2) {
   LOG.push({ i: SEQ++, sid: P.sid, t: t, v: v, v2: v2, at: Date.now() })
   flush()
+  if (HOP_OPS[t]) hop()      // 待办、倒数日这些走正门，屏幕闪一下就是存好了
 }
 
 /**
@@ -222,6 +223,12 @@ function flush() {
     STORE_OK = true
   } catch (e) { STORE_ERR = (e && e.message) || String(e) }
   if (!URLCHAN) return
+  var b64f = packLog()
+  if (b64f) { try { location.href = "myladay://save?m=" + b64f } catch (e) {} }
+}
+
+/** 把完整日志打包成纯 ASCII 的 base64。flush 和 hop 共用同一份实现。 */
+function packLog() {
   try {
     var recent = LOG.slice(-200)            // URL 不能无限长，留最近 200 条
     // 载荷必须是纯 ASCII。中文（待办内容、倒数日名字）走 base64 之后，
@@ -243,10 +250,27 @@ function flush() {
     })
     // 用 split/join 不用正则：模板字符串会把 \\+ 这种转义吞掉一层，
     // 写出来就成了 /+/g，非法正则，整个页面当场挂掉
-    var b64 = btoa(unescape(encodeURIComponent(json)))
+    return btoa(unescape(encodeURIComponent(json)))
       .split("+").join("-").split("/").join("_").split("=").join("")
-    location.href = "myladay://save?m=" + b64
-  } catch (e) {}
+  } catch (e) { return null }
+}
+
+/**
+ * 正门存盘：带着完整日志重启脚本本身。脚本在自己进程里直接写盘——
+ * 那条原语从第一天起就没败过——然后重新打开界面，屏幕会闪一下。
+ *
+ * 为什么要这么重：myladay:// 拦截那条路用户实测一百次从没送到过待办和倒数日，
+ * 而我在电脑上无法复现（真实点击+真实解码全绿）。修不了就不再依赖它。
+ * 按会话号+序号去重，就算拦截那条其实也到了，也不会重复执行。
+ */
+var HOP_OPS = { "todo.add": 1, "todo.save": 1, "todo.del": 1, "todo.toggle": 1, "todo.carry": 1,
+                "cd.add": 1, "cd.save": 1, "cd.del": 1,
+                "act.add": 1, "act.rename": 1, "act.del": 1,
+                "nudge": 1, "autoGrace": 1, "split": 1, "seg.retag": 1 }
+function hop() {
+  if (!URLCHAN) return
+  var b = packLog()
+  if (b) { try { location.href = "scriptable:///run?scriptName=Myla&do=" + b } catch (e) {} }
 }
 
 // 关窗口那一刻再补发一次，这是最后的机会
@@ -408,7 +432,7 @@ function viewToday() {
       + (it.done && it.doneAt ? '<div class="at">' + clock(Math.floor(it.doneAt / 1000)) + '</div>' : "")
       + '</div>'
   }
-  h += '<div class="addrow"><span class="plus">＋</span>'
+  h += '<div class="addrow"><span class="plus" onclick="addTodo()">＋</span>'
     + '<input id="newTodo" placeholder="加一条" enterkeyhint="done"'
     + ' onkeydown="if(event.key===\\'Enter\\'){addTodo();event.preventDefault()}" onblur="addTodo()"></div>'
   if (!P.todos.length && P.carry) {
