@@ -239,6 +239,15 @@ function drawTable(t, defer) {
 
   head(t, "别的")
   deferAction(t, defer, "看圆盘 / 统计", null, () => runApp())
+  {
+    // 外观：点一下循环切换，当场存盘重画，不用弹窗
+    const label = { auto: "跟随系统", dark: "夜间", light: "日间" }[data.appearance || "auto"]
+    action(t, "外观 · " + label, null, () => {
+      data.appearance = { auto: "dark", dark: "light", light: "auto" }[data.appearance || "auto"]
+      persist("切外观")
+      drawTable(t, defer); t.reload()
+    })
+  }
   deferAction(t, defer, "管理状态", null, () => manageActs())
   deferAction(t, defer, "定时问一句 · " + (data.nudgeMinutes === 0 ? "关着"
     : (data.nudgeMinutes || 90) + " 分钟"), null, () => setNudge())
@@ -370,6 +379,8 @@ async function setNudge() {
 // 存盘还是行点击当场 C.save 那条路，一行没动。
 
 function uiDark() {
+  if (data.appearance === "dark") return true
+  if (data.appearance === "light") return false
   try { return Device.isUsingDarkAppearance() } catch (e) { return true }
 }
 function uiWidth() {
