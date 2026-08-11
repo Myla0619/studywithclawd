@@ -57,6 +57,9 @@ if (incoming) {
     await a.present()
   }
 } else {
+  // 更新放在开窗口之前，因为「关窗口之后」那个位置对上划退出 app 的人根本不会跑，
+  // 于是永远更不到新版。这里最多六小时查一次，静默下载不打断你，下次打开生效。
+  await selfUpdate(false)
   await runApp()
 }
 Script.complete()
@@ -147,8 +150,8 @@ async function runApp() {
     try { await DocumentPicker.exportFile(C.DATA) } catch (e) { /* 取消了 */ }
   }
 
-  // 更新放在关掉窗口之后：一点都不占打开 app 的时间，下次打开就是新的
-  await selfUpdate(log.some(m => m.t === "update"))
+  // 手动点了「检查更新」才在这儿再查一次
+  if (log.some(m => m.t === "update")) await selfUpdate(true)
 }
 
 /**
@@ -161,14 +164,14 @@ async function runApp() {
  */
 async function selfUpdate(force) {
   const now = Date.now()
-  if (!force && data.lastCheck && now - data.lastCheck < 3600000) return
+  if (!force && data.lastCheck && now - data.lastCheck < 6 * 3600000) return
   data.lastCheck = now
 
   let sha = null
   try {
     const r = new Request("https://api.github.com/repos/" + REPO + "/commits/main")
     r.headers = { "User-Agent": "MylaDay" }      // 不带 UA 直接 403
-    r.timeoutInterval = 12
+    r.timeoutInterval = force ? 15 : 6      // 静默查的时候别让开 app 等太久
     sha = (await r.loadJSON()).sha
   } catch (e) {
     C.save(data)
@@ -216,6 +219,10 @@ async function selfUpdate(force) {
     const m = fm.readString(fm.joinPath(dir, "MylaCore.js")).match(/const VERSION = "([^"]*)"/)
     if (m) to = m[1]
   } catch (e) {}
+
+  data.pendingUpdate = to
+  C.save(data)
+  if (!force) return                        // 静默：不打断你，下次打开就生效
 
   const a = new Alert()
   a.title = "有新版了"
@@ -365,6 +372,7 @@ function payload() {
 
   return {
     version: C.VERSION,
+    pending: (data.pendingUpdate && data.pendingUpdate > C.VERSION) ? data.pendingUpdate : null,
     sub: `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`,
     warn: data.loadFailed
       ? { text: "数据文件读不出来，已从零开始。坏掉的那份留在 myladay.corrupt-*.json", hex: "#F2363C" }

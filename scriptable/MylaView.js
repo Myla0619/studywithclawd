@@ -704,7 +704,7 @@ function viewMore() {
                                     : P.autoGrace === 0 ? "随便覆盖" : "保护 " + P.autoGrace + " 分钟"],
     ["nudge()",      "定时问一句",   P.nudge === 0 ? "关着" : P.nudge + " 分钟"],
     ["wantExport()", "导出一份备份", "存到「文件」"],
-    ["wantUpdate()", "检查更新",     "关掉窗口后查"]
+    ["wantUpdate()", "检查更新",     P.pending ? "已下好 " + P.pending + "，下次打开生效" : "自动查"]
   ]
   var h = '<div class="card">'
   for (var i = 0; i < rows.length; i++) {
@@ -805,9 +805,12 @@ function wantExport() {
 }
 function wantUpdate() {
   log("update")
-  S.sheet = '<h3>关掉窗口就去查</h3>'
-    + '<div class="tip">有新版会自动下好，再打开一次就是新的。'
-    + '平时也会每小时自己查一次，一般不用点这里。</div>'
+  S.sheet = P.pending
+    ? '<h3>已经下好 ' + esc(P.pending) + '</h3>'
+      + '<div class="tip">下次打开这个 app 就是新版了，不用做别的。</div>'
+    : '<h3>关掉窗口后会去查一次</h3>'
+      + '<div class="tip">平时每次打开也会自己查（最多六小时一次），下好了下次打开生效。'
+      + '一般不用点这里。</div>'
   draw()
 }
 function alertSaved(msg) {
