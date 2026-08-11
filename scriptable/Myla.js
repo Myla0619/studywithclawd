@@ -165,22 +165,16 @@ function drawTable(t, defer) {
   for (const a of data.activities) {
     const r = new UITableRow()
     r.dismissOnSelect = false
-    r.height = 48
+    r.height = 58
+    r.__label = a.name        // 图片行没有文字，测试靠这个找行
     const on = open && open.a === a.id
-    const dot = r.addText(on ? "●" : "○")
-    dot.titleColor = new Color(a.hex); dot.titleFont = Font.systemFont(18); dot.widthWeight = 12
-    const c = r.addText(a.name)
-    c.titleColor = INK(); c.titleFont = on ? Font.boldSystemFont(18) : Font.systemFont(18)
-    c.widthWeight = 58
-    const d = r.addText(tot[a.id] ? C.hhmm(tot[a.id]) : "")
-    d.rightAligned(); d.widthWeight = 30
-    d.titleColor = INK(0.45); d.titleFont = Font.systemFont(13)
+    r.addImage(actPill(a, on, tot[a.id] ? C.hhmm(tot[a.id]) : "")).centerAligned()
     r.onSelect = () => {
-      // 当场存盘。这就是昨天那套。
+      // 当场存盘。这就是那条从没丢过的路。
       data = C.switchTo(data, a.id, Date.now(), "me")
       persist("切状态")
       scheduleNudge()
-      drawTable(t); t.reload()
+      drawTable(t, defer); t.reload()
     }
     t.addRow(r)
   }
@@ -193,23 +187,14 @@ function drawTable(t, defer) {
   for (const it of sorted) {
     const r = new UITableRow()
     r.dismissOnSelect = false
-    r.height = 46
-    const box = r.addText(it.done ? "☑︎" : "☐")
-    box.titleColor = it.done ? INK(0.3) : new Color("#7DD73C")
-    box.titleFont = Font.systemFont(19); box.widthWeight = 12
-    const c = r.addText(it.text)
-    c.titleColor = it.done ? INK(0.32) : INK()
-    c.titleFont = Font.systemFont(17); c.widthWeight = 73
-    if (it.done && it.doneAt) {
-      const d = r.addText(C.clock(Math.floor(it.doneAt / 1000)))
-      d.rightAligned(); d.widthWeight = 15
-      d.titleColor = INK(0.3); d.titleFont = Font.systemFont(12)
-    }
+    r.height = 56
+    r.__label = it.text
+    r.addImage(todoPill(it)).centerAligned()
     r.onSelect = () => {
       it.done = !it.done
       it.doneAt = it.done ? Date.now() : null
       persist("清单打勾")
-      drawTable(t); t.reload()
+      drawTable(t, defer); t.reload()
     }
     t.addRow(r)
   }
@@ -377,6 +362,119 @@ async function setNudge() {
   data.nudgeMinutes = i === opts.length ? 0 : opts[i]
   persist("改提醒间隔")
   scheduleNudge()
+}
+
+// ---------------------------------------------------------------- 胶囊卡片
+// 「好看的那版能不能 UITable」——能：UITable 撑布局和点击，DrawContext 撑长相。
+// 每个状态/待办/倒数日画成网页版那种圆角卡片，一行一张图、整行可点。
+// 存盘还是行点击当场 C.save 那条路，一行没动。
+
+function uiDark() {
+  try { return Device.isUsingDarkAppearance() } catch (e) { return true }
+}
+function uiWidth() {
+  try { return Math.min(Device.screenSize().width, 430) - 32 } catch (e) { return 358 }
+}
+function UI() {
+  return uiDark()
+    ? { card: "#1E1A24", ink: "#F6F1EC" }
+    : { card: "#FFFFFF", ink: "#2A2622" }
+}
+function pillCtx(w, h) {
+  const ctx = new DrawContext()
+  ctx.size = new Size(w, h)
+  ctx.opaque = false
+  ctx.respectScreenScale = true
+  return ctx
+}
+function rr(ctx, x, y, w, h, rad, hex, alpha) {
+  const p = new Path()
+  p.addRoundedRect(new Rect(x, y, w, h), rad, rad)
+  ctx.addPath(p)
+  ctx.setFillColor(alpha === undefined ? new Color(hex) : new Color(hex, alpha))
+  ctx.fillPath()
+}
+
+/** 状态胶囊：色点 + 名字 + 今日时长，当前状态描一圈自己的颜色。 */
+function actPill(a, on, lenText) {
+  const W = uiWidth(), H = 52, u = UI()
+  const ctx = pillCtx(W, H)
+  if (on) { rr(ctx, 0, 0, W, H, 15, a.hex); rr(ctx, 2, 2, W - 4, H - 4, 13, u.card) }
+  else rr(ctx, 0, 0, W, H, 15, u.card)
+  ctx.setFillColor(new Color(a.hex))
+  ctx.fillEllipse(new Rect(16, H / 2 - 5, 10, 10))
+  ctx.setTextAlignedLeft()
+  ctx.setFont(on ? Font.boldSystemFont(17) : Font.systemFont(17))
+  ctx.setTextColor(new Color(u.ink))
+  ctx.drawTextInRect(a.name, new Rect(38, H / 2 - 11, W - 150, 22))
+  if (lenText) {
+    ctx.setTextAlignedRight()
+    ctx.setFont(Font.systemFont(13))
+    ctx.setTextColor(new Color(u.ink, 0.45))
+    ctx.drawTextInRect(lenText, new Rect(W - 116, H / 2 - 9, 102, 18))
+  }
+  return ctx.getImage()
+}
+
+/** 待办胶囊：圆勾选框 + 文字，做完了变灰、圈变绿、右边记时间。 */
+function todoPill(it) {
+  const W = uiWidth(), H = 50, u = UI()
+  const ctx = pillCtx(W, H)
+  rr(ctx, 0, 0, W, H, 15, u.card)
+  const cy = H / 2
+  if (it.done) {
+    ctx.setFillColor(new Color("#58C04A"))
+    ctx.fillEllipse(new Rect(14, cy - 11, 22, 22))
+    ctx.setTextAlignedCenter()
+    ctx.setFont(Font.boldSystemFont(13))
+    ctx.setTextColor(new Color("#FFFFFF"))
+    ctx.drawTextInRect("✓", new Rect(14, cy - 8, 22, 16))
+  } else {
+    ctx.setFillColor(new Color(u.ink, 0.28))
+    ctx.fillEllipse(new Rect(14, cy - 11, 22, 22))
+    ctx.setFillColor(new Color(u.card))
+    ctx.fillEllipse(new Rect(16, cy - 9, 18, 18))
+  }
+  ctx.setTextAlignedLeft()
+  ctx.setFont(Font.systemFont(16))
+  ctx.setTextColor(new Color(u.ink, it.done ? 0.35 : 1))
+  ctx.drawTextInRect(it.text, new Rect(46, cy - 10, W - 46 - 64, 20))
+  if (it.done && it.doneAt) {
+    ctx.setTextAlignedRight()
+    ctx.setFont(Font.systemFont(12))
+    ctx.setTextColor(new Color(u.ink, 0.3))
+    ctx.drawTextInRect(C.clock(Math.floor(it.doneAt / 1000)), new Rect(W - 62, cy - 8, 48, 16))
+  }
+  return ctx.getImage()
+}
+
+/** 倒数日胶囊：左色条 + 名字/日期 + 右侧大数字。已过的整体退灰。 */
+function cdPill(it) {
+  const W = uiWidth(), H = 56, u = UI()
+  const past = it.days < 0
+  const ctx = pillCtx(W, H)
+  rr(ctx, 0, 0, W, H, 15, u.card)
+  rr(ctx, 12, 10, 4, H - 20, 2, it.cd.hex || "#F566AD")
+  ctx.setTextAlignedLeft()
+  ctx.setFont(Font.semiboldSystemFont(16))
+  ctx.setTextColor(new Color(u.ink, past ? 0.45 : 0.95))
+  ctx.drawTextInRect(it.cd.name, new Rect(28, 8, W - 150, 20))
+  ctx.setFont(Font.systemFont(12))
+  ctx.setTextColor(new Color(u.ink, 0.4))
+  ctx.drawTextInRect(dateLine(it), new Rect(28, H - 24, W - 150, 16))
+  ctx.setTextAlignedRight()
+  const big = it.days === 0 ? "今天" : String(Math.abs(it.days))
+  ctx.setFont(Font.boldSystemFont(24))
+  ctx.setTextColor(it.days === 0 ? new Color(it.cd.hex || "#F566AD")
+                                 : new Color(u.ink, past ? 0.3 : 0.9))
+  ctx.drawTextInRect(big, new Rect(W - 112, H / 2 - 16, it.days === 0 ? 100 : 72, 30))
+  if (it.days !== 0) {
+    ctx.setTextAlignedLeft()
+    ctx.setFont(Font.systemFont(12))
+    ctx.setTextColor(new Color(u.ink, 0.4))
+    ctx.drawTextInRect("天", new Rect(W - 34, H / 2 + 1, 22, 16))
+  }
+  return ctx.getImage()
 }
 
 function head(t, text) {

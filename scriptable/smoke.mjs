@@ -219,6 +219,10 @@ const Request = class {
   async loadString() { throw new Error("离线") }
 }
 const DocumentPicker = { exportFile: async () => {} }
+const Device = {
+  isUsingDarkAppearance: () => true,
+  screenSize: () => new Size(390, 844)
+}
 const Script = { complete: () => {} }
 const config = { runsInApp: true, runsInWidget: false }
 
@@ -236,8 +240,8 @@ function readModule(name) {
 
 const GLOBALS = {
   Size, Rect, Point, Color, Font, Path, DrawContext, Data, FileManager, WebView,
-  UITable, UITableRow, Alert, Notification, Timer, Request, DocumentPicker, Script,
-  config, args: {}
+  UITable, UITableRow, Alert, Notification, Timer, Request, DocumentPicker, Device,
+  Script, config, args: {}
 }
 
 let SCENARIO = {}
@@ -273,7 +277,8 @@ const tk = C.dayKey()
 
 async function tapRow(table, text) {
   for (const r of table.rows) {
-    if (r.text.indexOf(text) >= 0 && r.onSelect) { await r.onSelect(); return true }
+    const label = (r.__label || "") + " " + r.text
+    if (label.indexOf(text) >= 0 && r.onSelect) { await r.onSelect(); return true }
   }
   throw new Error("界面上找不到「" + text + "」这一行")
 }
