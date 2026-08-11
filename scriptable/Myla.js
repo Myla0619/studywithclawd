@@ -82,16 +82,16 @@ if (incoming) {
   await selfUpdate(false)
   // 上次可能留着没落盘的操作（点了东西然后被杀），先捞回来
   await drainPending()
-  // 一个思路，不再两套：凡是会改数据的，全部走脚本这边的 UITable——
-  // onSelect 就是脚本代码，点一下当场 C.save，中间不经过网页。
+  // 默认是网页那套好看的界面，能改数据。
   //
-  // 为什么不留网页那条：切状态、待办、倒数日在网页里各丢过一轮，我逐个修
-  // （baseURL 拦跳转、JSON 二次编码、非 ASCII 解不回来）每次都能找到真 bug，
-  // 但用户始终在丢数据。两套并存的代价是「有的能存有的不能存」，
-  // 排查成本全压在用户身上。统一到验证过的那一套。
+  // 网页版待办和倒数日存不住的原因是非 ASCII：中文走 base64 之后脚本那边解不回来，
+  // JSON.parse 失败整批丢。这个在 20260812-0337 修好了，但当时自动更新还是六小时
+  // 查一次，用户根本没更到；等更新间隔改短，我又把界面换成了 UITable。
+  // 所以「好看的界面 + 中文修复」这个组合他一次都没试过。换回来。
   //
-  // 网页留着当查看器：圆盘、统计、单项详情。viewOnly 打开，里面点不了任何东西。
-  await showTable()
+  // 简易模式（UITable，点一下当场存盘）留在「别的」里当保险。
+  if (data.simpleMode) await showTable()
+  else await runApp()
 }
 Script.complete()
 
@@ -819,7 +819,7 @@ function payload() {
   return {
     version: C.VERSION,
     sid: SID,
-    viewOnly: true,   // 网页只负责看。改数据一律在 UITable 那边，只有一条路。
+    viewOnly: !!data.simpleMode,   // 简易模式下网页只负责看
     pending: (data.pendingUpdate && data.pendingUpdate > C.VERSION) ? data.pendingUpdate : null,
     sub: `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`,
     warn: data.loadFailed
