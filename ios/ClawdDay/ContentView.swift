@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var detail: Activity? = nil
     @State private var showSummary = false
     @State private var showPlaces = false
+    @State private var splitting: Segment? = nil
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -47,6 +48,25 @@ struct ContentView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
+                    }
+
+                    // A stretch this long is almost always a forgotten switch —
+                    // most often falling asleep. Offer to cut it rather than
+                    // guessing where the boundary was.
+                    if let open = log.openSegment, open.duration(now: now) > 4 * 3600 {
+                        Button { splitting = open } label: {
+                            HStack {
+                                Image(systemName: "scissors")
+                                Text("这一段已经 \(hhmm(open.duration(now: now)))，中间换过吗？")
+                                    .font(.footnote)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(12)
+                            .background(Color.primary.opacity(0.06),
+                                        in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 20)
                     }
 
                     switcher
@@ -85,6 +105,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showPlaces) {
                 PlacesView(activities: $activities) { reload() }
+            }
+            .sheet(item: $splitting) { seg in
+                SplitSegment(segment: seg, activities: activities) { reload() }
             }
         }
         .onReceive(tick) { now = $0 }

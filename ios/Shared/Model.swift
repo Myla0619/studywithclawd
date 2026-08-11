@@ -132,6 +132,22 @@ enum Store {
         save(today)
     }
 
+    /// Cut a segment in two at `when`, giving the later half a different state.
+    /// This is how a forgotten switch gets fixed — including the big one, where
+    /// you fell asleep and nobody was awake to tap anything.
+    static func split(_ segmentID: String, at when: Date, laterBecomes activityID: String) {
+        var log = load()
+        guard let i = log.segments.firstIndex(where: { $0.id == segmentID }) else { return }
+        let old = log.segments[i]
+        guard when > old.start, when < (old.end ?? Date()) else { return }
+
+        log.segments[i].end = when
+        log.segments.insert(
+            Segment(activityID: activityID, start: when, end: old.end),
+            at: i + 1)
+        save(log)
+    }
+
     /// Call on launch and when the day flips: if yesterday still has a segment
     /// running, close it at midnight and re-open the same activity today, so
     /// sleeping through midnight lands correctly on both days.
