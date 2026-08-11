@@ -6,7 +6,8 @@
 
 - **clawd** — 学习陪伴面板：今日清单、每项任务的专注计时、每天一份汇总。**裸的 Clawd**
 - **claude-pet** — Claude Code 的进度挂件：Claude 在干活时冒出来报告进度，闲着自动消失。**显示器里的 Clawd**
-- **[ios/](ios/)** — iPhone 上的 24 小时圆盘 + 主屏小组件，记录一天都花在哪了（尚未编译验证，见该目录下的 README）
+- **[scriptable/](scriptable/)** — iPhone 上的 24 小时圆盘 + 主屏小组件。**不用 Xcode、不用 iCloud、不会过期**，手机装个免费 app 就行
+- **[ios/](ios/)** — 同样功能的 SwiftUI 原生版，要 Xcode。两条路都留着，看你想走哪条
 
 两只造型刻意做得不一样：学习那只就是 Clawd 本体，Claude Code 那只是一台显示器、Clawd 坐在屏幕里。同屏摆着也不会认错。
 
