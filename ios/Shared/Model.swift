@@ -15,16 +15,16 @@ struct Activity: Codable, Identifiable, Hashable {
     var color: Color { Color(hex: hex) }
 
     static let defaults: [Activity] = [
-        Activity(id: "sleep",    name: "睡觉",  hex: "6A85DC"),
-        Activity(id: "class",    name: "上课",  hex: "BA7CDE"),
-        Activity(id: "study",    name: "学习",  hex: "F39E5E"),
-        Activity(id: "research", name: "科研",  hex: "58D0AC"),
-        Activity(id: "eat",      name: "吃饭",  hex: "F4D452"),
-        Activity(id: "commute",  name: "通勤",  hex: "5EBCDE"),
-        Activity(id: "sport",    name: "运动",  hex: "8ACE5A"),
-        Activity(id: "rest",     name: "休息",  hex: "F089BD"),
-        Activity(id: "phone",    name: "刷手机", hex: "EA5358"),
-        Activity(id: "other",    name: "其他",  hex: "C1AA90")
+        Activity(id: "sleep",    name: "睡觉",  hex: "476BE1"),
+        Activity(id: "class",    name: "上课",  hex: "B05AE2"),
+        Activity(id: "study",    name: "学习",  hex: "F99243"),
+        Activity(id: "research", name: "科研",  hex: "3AD9AA"),
+        Activity(id: "eat",      name: "吃饭",  hex: "FAD338"),
+        Activity(id: "commute",  name: "通勤",  hex: "40BBE7"),
+        Activity(id: "sport",    name: "运动",  hex: "7DD73C"),
+        Activity(id: "rest",     name: "休息",  hex: "F566AD"),
+        Activity(id: "phone",    name: "刷手机", hex: "F2363C"),
+        Activity(id: "other",    name: "其他",  hex: "C4A582")
     ]
 }
 

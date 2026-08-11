@@ -12,16 +12,16 @@ const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 // ---------------------------------------------------------------- 数据
 
 const DEFAULT_ACTIVITIES = [
-  { id: "sleep",    name: "睡觉",  hex: "#6A85DC" },
-  { id: "class",    name: "上课",  hex: "#BA7CDE" },
-  { id: "study",    name: "学习",  hex: "#F39E5E" },
-  { id: "research", name: "科研",  hex: "#58D0AC" },
-  { id: "eat",      name: "吃饭",  hex: "#F4D452" },
-  { id: "commute",  name: "通勤",  hex: "#5EBCDE" },
-  { id: "sport",    name: "运动",  hex: "#8ACE5A" },
-  { id: "rest",     name: "休息",  hex: "#F089BD" },
-  { id: "phone",    name: "刷手机", hex: "#EA5358" },
-  { id: "other",    name: "其他",  hex: "#C1AA90" }
+  { id: "sleep",    name: "睡觉",  hex: "#476BE1" },
+  { id: "class",    name: "上课",  hex: "#B05AE2" },
+  { id: "study",    name: "学习",  hex: "#F99243" },
+  { id: "research", name: "科研",  hex: "#3AD9AA" },
+  { id: "eat",      name: "吃饭",  hex: "#FAD338" },
+  { id: "commute",  name: "通勤",  hex: "#40BBE7" },
+  { id: "sport",    name: "运动",  hex: "#7DD73C" },
+  { id: "rest",     name: "休息",  hex: "#F566AD" },
+  { id: "phone",    name: "刷手机", hex: "#F2363C" },
+  { id: "other",    name: "其他",  hex: "#C4A582" }
 ]
 
 function load() {
@@ -367,21 +367,21 @@ function drawClawd(ctx, cx, baseY, k, act, hexOverride) {
   for (const prop of props) {
     if (prop === "book") {
       let q = new Path(); q.addRoundedRect(R(-15, 6, 30, 15), 2 * k, 2 * k)
-      ctx.addPath(q); fill("#EA5358"); ctx.fillPath()
+      ctx.addPath(q); fill("#F2363C"); ctx.fillPath()
       fill("#FFFAF4")
       for (let i = 0; i < 3; i++) ctx.fillEllipse(R(-11, 16 - i * 4, 22, 1.6))
     }
     if (prop === "laptop") {
       let q = new Path(); q.addRoundedRect(R(-17, 5, 34, 19), 2 * k, 2 * k)
       ctx.addPath(q); fill("#3A3F47"); ctx.fillPath()
-      fill("#58D0AC")
+      fill("#3AD9AA")
       for (const [dx, w2, dy] of [[0, 16, 19], [0, 9, 15], [0, 21, 11], [0, 13, 7]])
         ctx.fillEllipse(R(-13 + dx, dy, w2, 1.8))
     }
     if (prop === "bowl") {
       poly([new Point(X(-14), Y(17)), new Point(X(14), Y(17)),
-            new Point(X(9), Y(4)), new Point(X(-9), Y(4))], "#5EBCDE")
-      fill("#F4D452"); ctx.fillEllipse(R(-14, 15.5, 28, 5))   // 碗里的饭
+            new Point(X(9), Y(4)), new Point(X(-9), Y(4))], "#40BBE7")
+      fill("#FAD338"); ctx.fillEllipse(R(-14, 15.5, 28, 5))   // 碗里的饭
       fill("#7FB4CC"); ctx.fillEllipse(R(-14.5, 16.5, 29, 2.5)) // 碗沿
     }
     if (prop === "mug") {
@@ -393,7 +393,7 @@ function drawClawd(ctx, cx, baseY, k, act, hexOverride) {
       let q = new Path(); q.addRoundedRect(R(-7, 9, 14, 21), 2.5 * k, 2.5 * k)
       ctx.addPath(q); fill("#3A3F47"); ctx.fillPath()
       q = new Path(); q.addRoundedRect(R(-5.5, 11, 11, 17), 1.5 * k, 1.5 * k)
-      ctx.addPath(q); fill("#5EBCDE"); ctx.fillPath()
+      ctx.addPath(q); fill("#40BBE7"); ctx.fillPath()
     }
     if (prop === "dumbbell") {
       fill("#6B6F76")
@@ -402,13 +402,13 @@ function drawClawd(ctx, cx, baseY, k, act, hexOverride) {
     }
     if (prop === "strap") { /* 占位，实际在下面画 */ }
     if (prop === "zzz") {
-      fill("#5EBCDE")
+      fill("#40BBE7")
       const zs = [[20, 52, 4], [27, 60, 5.5], [35, 69, 7]]
       for (const [zx, zy, zw] of zs) {
         ctx.fillEllipse(R(zx, zy + zw * 0.75, zw, 1.6))
         ctx.fillEllipse(R(zx, zy, zw, 1.6))
         poly([new Point(X(zx + zw), Y(zy + zw * 0.75)), new Point(X(zx + zw * 0.75), Y(zy + zw * 0.75)),
-              new Point(X(zx), Y(zy + 1.6)), new Point(X(zx + zw * 0.25), Y(zy + 1.6))], "#5EBCDE")
+              new Point(X(zx), Y(zy + 1.6)), new Point(X(zx + zw * 0.25), Y(zy + 1.6))], "#40BBE7")
       }
     }
   }

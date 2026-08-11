@@ -197,7 +197,7 @@ struct ActivityEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var newName = ""
 
-    private let palette = ["6A85DC", "BA7CDE", "F39E5E", "58D0AC", "F4D452", "5EBCDE", "8ACE5A", "F089BD", "EA5358", "C1AA90"]
+    private let palette = ["476BE1", "B05AE2", "F99243", "3AD9AA", "FAD338", "40BBE7", "7DD73C", "F566AD", "F2363C", "C4A582"]
 
     var body: some View {
         NavigationStack {
