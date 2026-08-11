@@ -26,6 +26,16 @@ const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周�
  *  必须声明在入口代码之前——const 在自己那行执行之前碰不得，而入口那段就会调用 runApp。 */
 const SID = "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
+// save() 写完会读回来核对，对不上就返回 false。我一直没看这个返回值——
+// 万一它是静默失败的，那前面那些通道全是无辜的，而我会一直往错的地方修。
+// 声明位置必须在入口之前：入口那段就会调用 runApp。
+let saveFailed = null
+function persist(where) {
+  try {
+    if (C.save(data) === false) saveFailed = where + "：写完读回来对不上"
+  } catch (e) { saveFailed = where + "：" + e.message }
+}
+
 const REPO = "Myla0619/studywithclawd"
 const UPDATE_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js",
                       "MylaWhy.js", "MylaTest.js"]
@@ -126,7 +136,7 @@ async function runApp() {
         if (m.t === "export") wantExport = true
         else if (m.t !== "update") { apply(m); n++ }
       }
-      if (n) C.save(data)
+      if (n) persist("实时拦截")
     } catch (e) { /* 收不下就等关窗口时的兜底 */ }
     return false
   }
@@ -147,7 +157,7 @@ async function runApp() {
       if (m.t === "export") wantExport = true
       else if (m.t !== "update") { apply(m); n++ }
     }
-    if (n) C.save(data)
+    if (n) persist("轮询/兜底")
     return n
   }
   // 落盘之后把页面那份残留清掉，不然下次启动会再捞一遍
@@ -176,6 +186,14 @@ async function runApp() {
   take(log)
   await clearPending()
   scheduleNudge()
+
+  if (saveFailed) {
+    const a = new Alert()
+    a.title = "存盘失败了"
+    a.message = saveFailed + "\n\n这说明问题在写文件那一步，不在页面通道。\n把这句话发给我。"
+    a.addAction("好")
+    await a.present()
+  }
 
   // 系统的文件选择器盖不到 WebView 上面，所以导出只能等窗口关掉再弹
   if (wantExport) {
@@ -362,6 +380,7 @@ function apply(m) {
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
+
 function sleep(ms) { return new Promise(r => Timer.schedule(ms, false, r)) }
 
 /** 把上次留在浏览器存储里、还没落盘的操作捞出来执行掉。 */
@@ -380,7 +399,7 @@ async function drainPending() {
       if (m.t === "export" || m.t === "update") continue
       apply(m); n++
     }
-    if (n) C.save(data)
+    if (n) persist("localStorage 捞回来的")
     await probe.evaluateJavaScript("localStorage.removeItem('myla_pending')")
   } catch (e) { /* 这条也不通就算了，还有另外四条 */ }
 }
