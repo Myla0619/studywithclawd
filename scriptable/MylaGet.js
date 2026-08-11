@@ -6,7 +6,6 @@
 // 或者文件写到了 A 目录而脚本列表读的是 B 目录。这三样这里都会报出来。
 
 const REPO = "Myla0619/studywithclawd"
-const EXPECT = "20260812-0155"          // 期望装上的版本
 const FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js", "MylaWhy.js"]
 
 const here = module.filename
@@ -41,19 +40,22 @@ if (sha) {
 SOURCES.push(["GitHub main", "https://raw.githubusercontent.com/" + REPO + "/main/scriptable/"])
 SOURCES.push(["jsDelivr main", "https://cdn.jsdelivr.net/gh/" + REPO + "@main/scriptable/"])
 
-// ---- 每个源先只拿 MylaCore.js，看它给的是哪一版
+// ---- 每个源先只拿 MylaCore.js，看它给的是哪一版，然后挑版本号最大的那个源。
+// 不写死期望版本：写死的话我每发一版，你手里这份就过期了。
+// 版本号是 20260812-0155 这种格式，字符串比大小就是比新旧。
 const probe = []
-let good = null
+const found = []
 for (const [label, base] of SOURCES) {
-  let line
   try {
-    const body = await get(base + "MylaCore.js")
-    const v = verOf(body)
-    line = label + " → " + (v || "读不出版本")
-    if (v === EXPECT && !good) { good = { label, base }; line += "  ✅" }
-    else if (v && v !== EXPECT) line += "  ⚠️旧"
-  } catch (e) { line = label + " → 失败：" + e.message }
-  probe.push(line)
+    const v = verOf(await get(base + "MylaCore.js"))
+    probe.push([label, v || "读不出版本", v])
+    if (v) found.push({ label, base, v })
+  } catch (e) { probe.push([label, "失败：" + e.message, null]) }
+}
+const newest = found.reduce((a, b) => (!a || b.v > a.v ? b : a), null)
+const good = newest
+for (const row of probe) {
+  row[1] = row[1] + (newest && row[2] === newest.v ? "  ✅" : row[2] ? "  ⚠️旧" : "")
 }
 
 // ---- 下载
@@ -61,7 +63,7 @@ const log = []
 let bad = 0
 if (!good) {
   bad = FILES.length
-  log.push("没有一个源给出 " + EXPECT + "，什么都没写。")
+  log.push("四个源一个都没拿到，什么都没写。")
 } else {
   for (const name of FILES) {
     try {
@@ -94,8 +96,9 @@ const dataFiles = FileManager.local().listContents(FileManager.local().documents
   .filter(f => f.indexOf("myladay") === 0)
 
 const a = new Alert()
-a.title = bad ? "没装成" : (onDisk === EXPECT ? "装好了 · " + onDisk : "写完了但回读是 " + onDisk)
-a.message = "各个源给的版本：\n" + probe.join("\n")
+a.title = bad ? "没装成"
+  : (newest && onDisk === newest.v ? "装好了 · " + onDisk : "写完了但回读是 " + onDisk)
+a.message = "各个源给的版本：\n" + probe.map(r => r[0] + " → " + r[1]).join("\n")
   + (apiNote ? "\n(" + apiNote + ")" : "")
   + "\n\n" + log.join("\n")
   + "\n\n写到：" + (inICloud ? "iCloud" : "本机") + "\n" + dir
