@@ -193,11 +193,32 @@ var SPANS = [["周", 7], ["月", 30], ["3个月", 90]]
 var CHARTS = [["柱状", "bar"], ["圆盘", "dial"]]
 
 function log(t, v, v2) {
-  var m = { i: SEQ++, t: t, v: v, v2: v2, at: Date.now() }
-  LOG.push(m)
-  if (!URLCHAN) return
-  try { location.href = "myladay://save?m=" + encodeURIComponent(JSON.stringify(m)) } catch (e) {}
+  LOG.push({ i: SEQ++, t: t, v: v, v2: v2, at: Date.now() })
+  flush()
 }
+
+/**
+ * 每次都把「到目前为止的全部操作」发过去，不是只发最新那一条。
+ *
+ * 这样只要有任意一条消息送达（哪怕只有最后一条），前面所有操作也都在里面。
+ * 脚本按序号去重，重复发不会重复执行。
+ *
+ * 单条发的话，中间丢一条就永久少一条——而这条通道我在电脑上验不了，
+ * 不能假设它每次都通。
+ */
+function flush() {
+  if (!URLCHAN || !LOG.length) return
+  try {
+    var recent = LOG.slice(-200)            // URL 不能无限长，留最近 200 条
+    location.href = "myladay://save?m=" + encodeURIComponent(JSON.stringify(recent))
+  } catch (e) {}
+}
+
+// 关窗口那一刻再补发一次，这是最后的机会
+window.addEventListener("pagehide", flush)
+window.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "hidden") flush()
+})
 function esc(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;")

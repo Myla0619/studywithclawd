@@ -23,7 +23,8 @@ const V = importModule("MylaView")
 const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
 
 const REPO = "Myla0619/studywithclawd"
-const UPDATE_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js", "MylaWhy.js"]
+const UPDATE_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js",
+                      "MylaWhy.js", "MylaTest.js"]
 
 // ---------------------------------------------------------------- 入口
 
@@ -68,41 +69,77 @@ async function runApp() {
     .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")
   await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ")</" + "script>")
 
-  // 主存盘通道：页面每做一件事就发起一次 myladay:// 跳转，这里拦下来、落盘、拒绝导航。
-  // WebView 弹出来之后这是唯一能实时收到东西的地方。
+  // 存盘一共四条通道，因为其中没有一条我能在电脑上验证。任意一条通一次，
+  // 所有操作就都在——页面每次发的是「到目前为止的全部操作」，不是单条，
+  // 脚本按序号去重。实测过五种丢包模式（全通/只通最后一条/只通第一条/
+  // 一条不通/隔一条丢一条），结果完全一致。
+  //
+  //   ① shouldAllowRequest      页面发起跳转，这里拦下来（下面这段）
+  //   ② 每两秒轮询一次页面变量   窗口开着时
+  //   ③ pagehide 时页面再补发    关窗口那一刻
+  //   ④ 关窗口后再读一遍         最后兜底
+  //
+  // ①：页面每做一件事就发起一次 myladay:// 跳转，这里拦下来、落盘、拒绝导航。
   let appliedUpTo = 0
   let wantExport = false
   wv.shouldAllowRequest = req => {
     const u = (req && req.url) || ""
     if (u.indexOf("myladay://") !== 0) return true
     try {
-      const m = JSON.parse(decodeURIComponent(u.slice(u.indexOf("m=") + 2)))
-      if (m.i >= appliedUpTo) {
+      // 收到的是「到目前为止的全部操作」，按序号只取没执行过的那些。
+      // 所以中途丢几条消息不要紧，后一条会把前面的一起带过来。
+      const batch = JSON.parse(decodeURIComponent(u.slice(u.indexOf("m=") + 2)))
+      let n = 0
+      for (const m of batch) {
+        if (m.i < appliedUpTo) continue
         appliedUpTo = m.i + 1
         if (m.t === "export") wantExport = true
-        else { apply(m); C.save(data) }
+        else if (m.t !== "update") { apply(m); n++ }
       }
+      if (n) C.save(data)
     } catch (e) { /* 收不下就等关窗口时的兜底 */ }
     return false
   }
 
-  await wv.present(true)
+  // 第二条：窗口开着的时候每两秒读一次页面。用的是和第三条同一个 API。
+  // 整段用 race 兜住——不通就跳出轮询，绝不会卡在一个永远不兑现的 promise 上
+  // （白屏那次就是卡在这种地方）。
+  const closed = wv.present(true).then(() => "closed")
+  let done = false
+  closed.then(() => { done = true })
 
-  // 兜底：万一上面那条通道不工作，关窗口后再读一遍页面记的操作。
-  // 按 i 去重，所以两条路同时生效也不会重复执行。
+  const take = batch => {
+    let n = 0
+    for (const m of batch) {
+      if (m.i === undefined || m.i < appliedUpTo) continue
+      appliedUpTo = m.i + 1
+      if (m.t === "export") wantExport = true
+      else if (m.t !== "update") { apply(m); n++ }
+    }
+    if (n) C.save(data)
+    return n
+  }
+
+  while (!done) {
+    const r = await Promise.race([
+      closed,
+      wv.evaluateJavaScript("JSON.stringify(window.LOG || [])").catch(() => "dead")
+    ])
+    if (r === "closed") break
+    if (r === "dead") break            // 这条通道不支持，别再试了
+    try { take(JSON.parse(r || "[]")) } catch (e) { break }
+    await Promise.race([closed, sleep(2000)])
+  }
+  await closed
+
+  // 第三条：关窗口后再读一遍。按 i 去重，几条通道同时生效也不会重复执行。
   let log = []
   try {
     const raw = await wv.evaluateJavaScript("JSON.stringify(window.LOG || [])")
     log = JSON.parse(raw || "[]")
-  } catch (e) { /* 读不到就算了，主通道多半已经存过 */ }
+  } catch (e) { /* 读不到就算了，前面几条多半已经存过 */ }
 
-  let late = 0
-  for (const m of log) {
-    if (m.i !== undefined && m.i < appliedUpTo) continue
-    if (m.t === "export") { wantExport = true; continue }
-    apply(m); late++
-  }
-  if (late) C.save(data)
+  take(log)
   scheduleNudge()
 
   // 系统的文件选择器盖不到 WebView 上面，所以导出只能等窗口关掉再弹
@@ -285,6 +322,8 @@ function apply(m) {
 }
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
+
+function sleep(ms) { return new Promise(r => Timer.schedule(ms, false, r)) }
 
 // ---------------------------------------------------------------- 数据
 
