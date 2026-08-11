@@ -5,10 +5,10 @@
 //   中号  圆盘 + 今天前几项时长
 //   大号  左边圆盘和时长，右边倒数日
 //
-// 圆盘和倒数日面板的画法都在 MylaDayCore，app 和小组件永远一致。
+// 圆盘和倒数日面板的画法都在 MylaCore，app 和小组件永远一致。
 // 右侧那块是画成一张图再放进来的，不是用堆栈拼的——画成图才能在电脑上渲染出来核对。
 
-const C = importModule("MylaDayCore")
+const C = importModule("MylaCore")
 
 const data = C.rollover(C.load())
 const segs = C.segments(data)
@@ -19,7 +19,7 @@ const w = new ListWidget()
 w.backgroundColor = new Color("#1B1720")
 w.setPadding(12, 12, 12, 12)
 // 点小组件直接打开主脚本
-w.url = "scriptable:///run?scriptName=MylaDay"
+w.url = "scriptable:///run?scriptName=Myla"
 
 const family = config.widgetFamily || "medium"
 

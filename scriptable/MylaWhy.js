@@ -8,7 +8,7 @@
 //   · 标着「你」但你没点过 → 那就是我的存盘逻辑有问题
 //   · 每天 00:00 那一段延续前一天 → 是跨零点接续，本来就该这样
 
-const C = importModule("MylaDayCore")
+const C = importModule("MylaCore")
 
 const fm = FileManager.local()
 const dir = module.filename.slice(0, module.filename.lastIndexOf("/"))
@@ -19,10 +19,10 @@ const say = (t, sub) => rows.push([t, sub || ""])
 let onDisk = "读不到"
 let ui = "?"
 try {
-  const core = fm.readString(fm.joinPath(dir, "MylaDayCore.js"))
+  const core = fm.readString(fm.joinPath(dir, "MylaCore.js"))
   const m = core.match(/const VERSION = "([^"]*)"/)
   if (m) onDisk = m[1]
-  const main = fm.readString(fm.joinPath(dir, "MylaDay.js"))
+  const main = fm.readString(fm.joinPath(dir, "Myla.js"))
   ui = main.indexOf("window.LOG") >= 0 ? "WebView（关窗口时存盘）"
      : main.indexOf("new WebView") >= 0 ? "WebView（旧的，来回通信那版）"
      : "老的 UITable 版"

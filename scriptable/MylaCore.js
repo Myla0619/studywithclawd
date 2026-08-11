@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-0132"
+const VERSION = "20260812-0138"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")

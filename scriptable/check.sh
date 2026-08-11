@@ -3,7 +3,7 @@
 #
 #  1. 顶层 await —— Scriptable 允许，Node 的 CommonJS 不允许，所以按模块语义查。
 #  2. 页面里的 JS —— 它被包在一个模板字符串里，对外层文件来说只是一段普通字符串，
-#     `node --check MylaDayHTML.js` 根本看不见它。里面写错了照样「通过」，
+#     `node --check MylaView.js` 根本看不见它。里面写错了照样「通过」，
 #     装到手机上就是白屏。所以要单独抠出来查一遍。
 #  3. 模板字符串里的转义 —— HTML 属性里的 \\' 少写一个反斜杠就会把引号提前闭合。
 #  4. 正则字面量里的 U+2028/2029 —— 它俩本身就是换行符，写进去当场断行。
@@ -28,7 +28,7 @@ done
 echo
 echo "── 页面里的 JS（模板字符串内部，外层查不到）"
 node -e '
-const H = require("./MylaDayHTML.js").HTML
+const H = require("./MylaView.js").HTML
 const i = H.indexOf("<script>"), j = H.lastIndexOf("</script>")
 if (i < 0) { console.error("找不到 <script>"); process.exit(1) }
 require("fs").writeFileSync("/tmp/_page.js", H.slice(i + 8, j))
@@ -53,7 +53,7 @@ else
 fi
 
 echo "── 模板字符串会吞掉的单反斜杠转义（\\d 写成 \\\\d 才对）"
-if grep -n '\\[dswDSWb]' MylaDayHTML.js | grep -v '\\\\[dswDSWb]' ; then
+if grep -n '\\[dswDSWb]' MylaView.js | grep -v '\\\\[dswDSWb]' ; then
   echo "  ✗ 上面这些是单反斜杠，模板字符串会把它变成普通字母，正则就废了"
   fail=1
 else

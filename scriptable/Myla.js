@@ -4,9 +4,9 @@
 //   直接运行 / 主屏幕图标        → 打开界面
 //   快捷指令自动化传参          → 切状态后立刻退出（到达某地时用）
 //   通知按钮 / URL scheme       → 同上
-//     scriptable:///run?scriptName=MylaDay&switchTo=study
+//     scriptable:///run?scriptName=Myla&switchTo=study
 //
-// 界面是一个自给自足的 WebView（MylaDayHTML.js）：数据在 loadHTML 之前就写进页面，
+// 界面是一个自给自足的 WebView（MylaView.js）：数据在 loadHTML 之前就写进页面，
 // 所有点击在页面内直接生效。这个文件负责两件事——开窗口之前把数据备齐，
 // 窗口关掉之后把页面记下的操作回放到数据上再存盘。
 //
@@ -17,14 +17,13 @@
 // 每条操作都带自己发生的时间戳，回放时用的是那个时间，不是关窗口的时间。
 // 所以 14:00 切成学习、14:30 才关窗口，记下来仍然是 14:00。
 
-const C = importModule("MylaDayCore")
-const V = importModule("MylaDayHTML")
+const C = importModule("MylaCore")
+const V = importModule("MylaView")
 
 const WEEK = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
 
 const REPO = "Myla0619/studywithclawd"
-const UPDATE_FILES = ["MylaDayCore.js", "MylaDayHTML.js", "MylaDay.js",
-                      "MylaDayWidget.js", "Check.js", "WebTest.js", "Why.js"]
+const UPDATE_FILES = ["MylaCore.js", "MylaView.js", "Myla.js", "MylaWidget.js", "MylaWhy.js"]
 
 // ---------------------------------------------------------------- 入口
 
@@ -177,7 +176,7 @@ async function selfUpdate(force) {
 
   let to = "?"
   try {
-    const m = fm.readString(fm.joinPath(dir, "MylaDayCore.js")).match(/const VERSION = "([^"]*)"/)
+    const m = fm.readString(fm.joinPath(dir, "MylaCore.js")).match(/const VERSION = "([^"]*)"/)
     if (m) to = m[1]
   } catch (e) {}
 
@@ -380,7 +379,7 @@ function scheduleNudge() {
       .slice(0, 2)
     for (const a of others) {
       n.addAction(`改成${a.name}`,
-        `scriptable:///run?scriptName=MylaDay&switchTo=${encodeURIComponent(a.id)}`, false)
+        `scriptable:///run?scriptName=Myla&switchTo=${encodeURIComponent(a.id)}`, false)
     }
     n.setTriggerDate(new Date(Date.now() + mins * 60000))
     n.schedule()
