@@ -29,8 +29,8 @@ struct ClawdDrawn: View {
                        width: w * s, height: h * s)
             }
 
-            let body = tint ?? Color(hex: "D06749")
-            let shade = (tint ?? Color(hex: "D06749")).opacity(0.88)
+            let body = tint ?? Color(hex: "E88E68")
+            let shade = (tint ?? Color(hex: "E88E68")).opacity(0.88)
             let cream = Color(hex: "FFFAF4")
             let ink = Color(hex: "5A4A44")
 

@@ -242,8 +242,8 @@ function fatLine(ctx, x0, y0, x1, y1, w, color) {
  * 圆滚滚那只 Clawd。k 是缩放，act 是当前状态 id —— 不同状态给不同动作。
  * 颜色固定用 Clawd 自己的橙，不跟着状态变。
  */
-function drawClawd(ctx, cx, baseY, k, act) {
-  const HEX = "#D06749"
+function drawClawd(ctx, cx, baseY, k, act, hexOverride) {
+  const HEX = hexOverride || "#E88E68"
   const SH = shadeHex(HEX)
   const cream = "#FFFAF4", ink = "#5A4A44"
   const X = x => cx + x * k
