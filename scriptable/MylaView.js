@@ -214,6 +214,9 @@ function flush() {
   if (!LOG.length) return
   // 第五条通道，也是唯一扛得住「上划把 app 杀掉」的：写进浏览器自己的存储，
   // 下次启动时脚本在开窗口之前把它捞出来。不需要任何页面到脚本的实时通道。
+  // localStorage 是尽力而为：没有 baseURL 时它会抛异常，这是设计内的——
+  // baseURL 会把 myladay:// 通道整个掐死（https 页面禁止跳自定义协议），
+  // 那条才是真正送数据的路。
   try {
     localStorage.setItem("myla_pending", JSON.stringify(LOG.slice(-400)))
     STORE_OK = true
@@ -748,7 +751,7 @@ function viewMore() {
     ["wantUpdate()", "检查更新",     P.pending ? "已下好 " + P.pending + "，下次打开生效" : "自动查"],
     ["simpleMode()", "简易模式",     P.simpleMode ? "开着" : "关着"],
     ["explainLog()", "这次改了几条", LOG.length + " 条"
-      + (LOG.length ? (STORE_OK ? " · 已暂存" : " · ⚠️ 暂存不了") : "")]
+      ]
   ]
   var h = '<div class="card">'
   for (var i = 0; i < rows.length; i++) {

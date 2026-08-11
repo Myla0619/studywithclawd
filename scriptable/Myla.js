@@ -423,15 +423,16 @@ async function runApp() {
   const wv = new WebView()
   const json = JSON.stringify(payload())
     .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029")
-  // 给一个 https 的 baseURL：没有源的话 localStorage 直接抛异常，而 localStorage
-  // 是唯一扛得住「上划把 app 杀掉」的通道。
+  // 不给 baseURL —— 这一行是整个丢数据案子的案发现场，别再动它。
   //
-  // 我一度为了保住 myladay:// 跳转把它去掉了，但用户实测那条跳转一次都没送达，
-  // 等于白牺牲了唯一管用的那条。现在优先保 localStorage：
-  //   上划退出  → 下次启动从 localStorage 捞回来
-  //   正常关窗口 → 关掉后读页面变量（用户实测这条是通的）
-  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ", true)</" + "script>",
-                    "https://myla.local/")
+  // 带上 https 的 baseURL，页面就有了 https 身份，WKWebView 禁止 https 页面
+  // 跳转到自定义协议，myladay:// 一条都发不出去：这正是「MylaTest 体检全绿
+  // （它的页面没有 baseURL）、真 app 里 applied 一条记录都没有」的原因。
+  // 加 baseURL 换来的 localStorage 也是假的——Scriptable 的 WebView 每次都是
+  // 新实例，localStorage 存不过夜，从没成功捞回过任何东西。
+  //
+  // 上划退出也不怕：myladay:// 是点击当下就发的，不依赖任何「关窗口之后」的代码。
+  await wv.loadHTML(V.HTML + "<script>window.boot(" + json + ", true)</" + "script>")
 
   // 存盘一共四条通道，因为其中没有一条我能在电脑上验证。任意一条通一次，
   // 所有操作就都在——页面每次发的是「到目前为止的全部操作」，不是单条，
@@ -757,7 +758,9 @@ function decodePayload(raw) {
   return t
 }
 
-/** 把上次留在浏览器存储里、还没落盘的操作捞出来执行掉。 */
+/** 把上次留在浏览器存储里、还没落盘的操作捞出来执行掉。
+ *  这里保留 myla.local 的 baseURL：旧版本的残留写在那个源下面，换源就读不到了。
+ *  新版本不再往 localStorage 写，这个函数只为清旧账。 */
 async function drainPending() {
   try {
     const probe = new WebView()
