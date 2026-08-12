@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-0435"
+const VERSION = "20260812-1821"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
@@ -15,17 +15,21 @@ const TMP  = fm.joinPath(fm.documentsDirectory(), "myladay.writing.json")
 
 // ---------------------------------------------------------------- 数据
 
+// 配色按用户真实作息的相邻关系调过：
+//   睡-手机-出门-通勤-学习/科研/吃饭/休息穿插-通勤-洗澡-手机-睡
+// 早上睡觉的蓝紧贴刷手机——红改珊瑚，不再像警报；晚上科研贴通勤——
+// 薄荷绿改祖母绿，跟天蓝拉开；学习加深一点做全环的主角；吃饭更暖。
 const DEFAULT_ACTIVITIES = [
-  { id: "sleep",    name: "睡觉",  hex: "#476BE1" },
+  { id: "sleep",    name: "睡觉",  hex: "#5464DE" },
   { id: "class",    name: "上课",  hex: "#B05AE2" },
-  { id: "study",    name: "学习",  hex: "#F99243" },
-  { id: "research", name: "科研",  hex: "#3AD9AA" },
-  { id: "eat",      name: "吃饭",  hex: "#FAD338" },
-  { id: "commute",  name: "通勤",  hex: "#40BBE7" },
-  { id: "sport",    name: "运动",  hex: "#7DD73C" },
+  { id: "study",    name: "学习",  hex: "#F5822F" },
+  { id: "research", name: "科研",  hex: "#2EC98A" },
+  { id: "eat",      name: "吃饭",  hex: "#FFD84A" },
+  { id: "commute",  name: "通勤",  hex: "#3FB4E6" },
+  { id: "sport",    name: "运动",  hex: "#8FD948" },
   { id: "rest",     name: "休息",  hex: "#F566AD" },
-  { id: "phone",    name: "刷手机", hex: "#F2363C" },
-  { id: "other",    name: "其他",  hex: "#C4A582" }
+  { id: "phone",    name: "刷手机", hex: "#F4574E" },
+  { id: "other",    name: "其他",  hex: "#CBA98B" }
 ]
 
 /**
@@ -72,6 +76,11 @@ function migrate(d) {
   if (!d.countdowns) d.countdowns = [] // [{id, name, date:"2026-12-25", yearly, hex}]
   if (d.autoGrace === undefined) d.autoGrace = 30
   if (!d.appearance) d.appearance = "auto"   // auto=跟随系统 dark=夜间 light=日间
+  // 调色板升级要能到达老数据：默认状态的颜色以代码里为准（名字不动，改过名的保留）
+  for (const a of d.activities) {
+    const def = DEFAULT_ACTIVITIES.find(x => x.id === a.id)
+    if (def) a.hex = def.hex
+  }
   if (!d.applied) d.applied = {}      // { 会话号: 已执行到第几条 }，跨会话去重用   // 自动切换多久内不许覆盖手动的；0=不保护，-1=完全拒绝
   if (!d.ui) d.ui = { span: 7, chart: "bar" }
   d.v = SCHEMA
