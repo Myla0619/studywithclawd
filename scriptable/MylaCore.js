@@ -7,9 +7,11 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-1821"
+const VERSION = "20260812-2325"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
+// 自定义中间形象。文件名以 myladay 开头，跟数据一样受「更新不碰」的保护
+const AVATAR = fm.joinPath(fm.documentsDirectory(), "myladay.avatar.png")
 const BAK  = fm.joinPath(fm.documentsDirectory(), "myladay.backup.json")
 const TMP  = fm.joinPath(fm.documentsDirectory(), "myladay.writing.json")
 
@@ -478,7 +480,23 @@ function drawDial(data, segs, size, opts) {
 
   const open = openSegment(segs)
   const cur = open ? activityOf(data, open.a) : null
-  drawClawd(ctx, cx, cy + size * 0.010, size * 0.0042, cur ? cur.id : null)
+  // 中间形象：用户自己的图优先（从相册导入的），没有就画 Clawd。
+  // DrawContext 没有裁剪 API，圆形裁切用老办法：先画方图，再用多边形圆环
+  // 把圆外的部分盖回卡片底色——和画圆盘用的是同一个 ringSlice。
+  let drewAvatar = false
+  if (fm.fileExists(AVATAR)) {
+    try {
+      const av = fm.readImage(AVATAR)
+      if (av) {
+        const rA = size * 0.205
+        const ay = cy - size * 0.075
+        ctx.drawImageInRect(av, new Rect(cx - rA, ay - rA, rA * 2, rA * 2))
+        ringSlice(ctx, cx, ay, rA, rA * 1.52, 0, 1, "#1B1720")
+        drewAvatar = true
+      }
+    } catch (e) { /* 图读不出来就退回 Clawd */ }
+  }
+  if (!drewAvatar) drawClawd(ctx, cx, cy + size * 0.010, size * 0.0042, cur ? cur.id : null)
 
   if (cur) {
     ctx.setTextAlignedCenter()
@@ -708,6 +726,6 @@ function shadeHex(hex) {
 module.exports = {
   VERSION, DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
   switchTo, autoSwitch, splitSegment, duration, totals, hhmm, clock, activityOf,
-  drawDial, drawDonut, drawClawd, drawCountdowns, untilDays, sortedCountdowns,
+  AVATAR, drawDial, drawDonut, drawClawd, drawCountdowns, untilDays, sortedCountdowns,
   CD_PALETTE, DEFAULT_ACTIVITIES, DATA
 }

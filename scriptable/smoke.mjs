@@ -31,6 +31,7 @@ class DrawContext {
   setFillColor() {} setStrokeColor() {} setLineWidth() {} setTextColor() {} setFont() {}
   setTextAlignedCenter() {} setTextAlignedLeft() {} setTextAlignedRight() {}
   fillRect() {} fillEllipse() {} addPath() {} fillPath() {} strokePath() {} drawTextInRect() {}
+  drawImageInRect() {} drawImageAtPoint() {}
   getImage() { return { __img: true } }
 }
 const Data = {
@@ -49,6 +50,8 @@ const FileManager = {
 }
 const FM = {
   documentsDirectory: () => "/docs",
+  readImage: p => { if (!(p in disk)) throw new Error("no image"); return { __img: true, size: { width: 480, height: 480 } } },
+  writeImage: (p, img) => { disk[p] = "IMG" },
   joinPath: (a, b) => path.join(a, b),
   fileExists: p => p in disk,
   readString: p => { if (!(p in disk)) throw new Error("no such file " + p); return disk[p] },
@@ -285,7 +288,8 @@ async function tapRow(table, text) {
 
 // ---- 主界面 UITable，所有写操作直接存盘
 disk = {}; store = {}
-await runMyla("② 点「学习」", { taps: async t => { await tapRow(t, "学习") } })
+disk["/docs/myladay.avatar.png"] = "IMG"     // 自定义中间形象：走画头像那条分支
+await runMyla("② 点「学习」（中间是自定义形象）", { taps: async t => { await tapRow(t, "学习") } })
 let d = C.load()
 console.log("     → 段：" + (d.days[tk] || []).map(s => C.activityOf(d, s.a).name).join(">"))
 if (!(d.days[tk] || []).some(s => s.a === "study")) { console.log("     ❌ 没存下来"); process.exit(1) }

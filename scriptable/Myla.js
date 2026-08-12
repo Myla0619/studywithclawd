@@ -248,6 +248,7 @@ function drawTable(t, defer) {
       drawTable(t, defer); t.reload()
     })
   }
+  deferAction(t, defer, "中间的形象 · " + (data.avatarOn ? "自己的图" : "Clawd"), null, () => avatarFlow())
   deferAction(t, defer, "管理状态", null, () => manageActs())
   deferAction(t, defer, "定时问一句 · " + (data.nudgeMinutes === 0 ? "关着"
     : (data.nudgeMinutes || 90) + " 分钟"), null, () => setNudge())
@@ -356,6 +357,49 @@ async function newAct() {
   data.activities.push({ id: "c" + uid().slice(0, 6), name: v,
     hex: pal[data.activities.length % pal.length] })
   persist("加状态")
+}
+
+/** 换圆盘中间的形象：从相册选一张图，缩成方块存起来；随时换回 Clawd。 */
+async function avatarFlow() {
+  const al = new Alert()
+  al.title = "圆盘中间放什么"
+  al.message = "从相册选的图会裁成圆形放在圆盘中心，小组件上同步。"
+  al.addAction("从相册选一张")
+  if (FileManager.local().fileExists(C.AVATAR)) al.addDestructiveAction("换回 Clawd")
+  al.addCancelAction("取消")
+  const i = await al.present()
+  if (i < 0) return
+  const fmL = FileManager.local()
+
+  if (i === 1) {                     // 换回 Clawd
+    try { fmL.remove(C.AVATAR) } catch (e) {}
+    data.avatarOn = false
+    persist("换回 Clawd")
+    return
+  }
+
+  try {
+    const img = await Photos.fromLibrary()
+    if (!img) return
+    // 归一成 480 方块（图太大的话小组件画起来又慢又费内存）
+    const box = 480
+    const ctx = new DrawContext()
+    ctx.size = new Size(box, box)
+    ctx.opaque = false
+    ctx.respectScreenScale = false
+    const sc = Math.max(box / img.size.width, box / img.size.height)
+    const w = img.size.width * sc, h = img.size.height * sc
+    ctx.drawImageInRect(img, new Rect((box - w) / 2, (box - h) / 2, w, h))
+    fmL.writeImage(C.AVATAR, ctx.getImage())
+    data.avatarOn = true
+    persist("换中间形象")
+  } catch (e) {
+    const b = new Alert()
+    b.title = "没换成"
+    b.message = (e && e.message) || String(e)
+    b.addAction("好")
+    await b.present()
+  }
 }
 
 async function setNudge() {
