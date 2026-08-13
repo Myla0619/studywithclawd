@@ -212,7 +212,9 @@ class Notification {
   constructor() {}
   static async allPending() { return [] }
   addAction(t) { notes.push(t) }
-  setTriggerDate() {} schedule() {} remove() {}
+  setTriggerDate() {}
+  schedule() { notes.push((this.title || "") + " | " + (this.body || "")) }
+  remove() {}
 }
 Notification.allPending = async () => []
 const Timer = { schedule: (ms, rep, cb) => setTimeout(cb, 0) }
@@ -254,9 +256,13 @@ async function runMyla(label, scenario) {
   alerts.length = 0
   for (const k of Object.keys(modules)) delete modules[k]
   const src = fs.readFileSync(path.join(DIR, "Myla.js"), "utf8")
+  const vals = Object.values(GLOBALS).slice()
+  const argIdx = Object.keys(GLOBALS).indexOf("args")
+  vals[argIdx] = SCENARIO.args || {}
   const fn = new Function("importModule", ...Object.keys(GLOBALS),
     "return (async () => {\n" + src + "\n})()")
-  await fn(n => readModule(n + ".js"), ...Object.values(GLOBALS))
+  try { await fn(n => readModule(n + ".js"), ...vals) }
+  catch (e) { if (e.message !== "__done__") throw e }
   console.log("  ✓ " + label + " 跑通了")
 }
 
@@ -328,6 +334,26 @@ await runMyla("⑥ 紧接着再打开一次（不该翻倍）", {})
 d = C.load()
 console.log("     → 待办：" + (d.todos[tk] || []).map(x => x.text).join("、"))
 if ((d.todos[tk] || []).length !== 1) { console.log("     ❌ 重复执行了"); process.exit(1) }
+
+// ⑦ 微信复制 → 快捷指令进待办：拆条、去客套、去重
+disk = {}; store = {}
+notes.length = 0
+await runMyla("⑦ 微信剪贴板进待办", {
+  args: { shortcutParameter: "todo:好的\n记得把周报发给导师。\n3. 预约周五的组会教室\n哈哈哈" }
+})
+d = C.load()
+const wt = (d.todos[tk] || []).map(x => x.text)
+console.log("     → 收进来的：" + (wt.join("、") || "空"))
+if (wt.length !== 2 || wt[0] !== "把周报发给导师" || wt[1] !== "预约周五的组会教室") {
+  console.log("     ❌ 解析不对（该收 2 条：去掉客套和序号）"); process.exit(1)
+}
+console.log("     → 通知：" + (notes[notes.length-1] || "无"))
+await runMyla("   同一段再发一次（不该重复）", {
+  args: { shortcutParameter: "todo:记得把周报发给导师。" }
+})
+d = C.load()
+if ((d.todos[tk] || []).length !== 2) { console.log("     ❌ 重复添加了"); process.exit(1) }
+console.log("     ✓ 拆条、去客套、去重都对")
 
 console.log("\n弹过的窗：" + (alerts.filter(Boolean).join(" / ") || "（没有）"))
 console.log("\n全部跑通 ✅")

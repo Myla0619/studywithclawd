@@ -69,6 +69,41 @@ if (doParam) {
   throw new Error("__done__")   // Script.complete 不中断执行，别让下面的入口再跑一遍
 }
 
+// 从微信来的待办：快捷指令把剪贴板以 todo: 前缀传进来（或 URL 的 todo 参数）。
+// 静默处理：解析、拆条、去重、直接写盘、通知确认，不开界面。
+const todoParam = ((args.queryParameters && args.queryParameters.todo) || "").toString()
+  || (String(args.shortcutParameter || "").indexOf("todo:") === 0
+      ? String(args.shortcutParameter).slice(5) : "")
+if (todoParam.trim()) {
+  const key = C.dayKey()
+  const list = data.todos[key] || (data.todos[key] = [])
+  const items = extractTodos(todoParam)
+  const added = []
+  for (const text of items) {
+    // 按内容去重：同一条消息复制两次不该出现两条
+    if (list.some(x => x.text === text)) continue
+    list.push({ id: uid(), text, done: false })
+    added.push(text)
+  }
+  if (added.length) C.save(data)
+
+  const n = new Notification()
+  n.title = added.length ? "记到今天要做的了 ✓" : "没有新东西"
+  n.body = added.length ? added.join("\n")
+    : (items.length ? "这些已经在清单里了" : "剪贴板里没读到能当待办的内容")
+  n.schedule()
+
+  if (config.runsInApp) {
+    const a = new Alert()
+    a.title = n.title
+    a.message = n.body
+    a.addAction("好")
+    await a.present()
+  }
+  Script.complete()
+  throw new Error("__done__")
+}
+
 const fromShortcut = (args.shortcutParameter || "").toString().trim()
 const fromURL = (args.queryParameters && args.queryParameters.switchTo) || ""
 const incoming = fromURL || fromShortcut
@@ -895,6 +930,29 @@ function apply(m) {
 }
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
+
+/**
+ * 从一段聊天文字里抠出待办。微信消息什么样都有，规则从宽：
+ * 按行和句号拆开，去掉序号、称呼、纯客套，太长的截到一句话，最多收 5 条。
+ * 宁可多收一条（删一条只要两下），不可漏掉正事。
+ */
+function extractTodos(raw) {
+  const out = []
+  const parts = String(raw).split(/[\n\r]+|(?<=[。；;！!])/)
+  for (let t of parts) {
+    t = t.trim()
+      .replace(/^[-•·*\d]+[.、)）\s]+/, "")            // 1. / - / · 这类序号
+      .replace(/^(记得|别忘了|麻烦你?|帮我|你|拜托)/, "") // 常见开场
+      .replace(/[。；;！!\s]+$/, "")
+    if (!t) continue
+    if (/^(好的?|收到|嗯+|哈+|谢谢|辛苦了|在吗|OK|ok)$/.test(t)) continue   // 纯客套
+    if (t.length < 2) continue
+    if (t.length > 60) t = t.slice(0, 60) + "…"
+    out.push(t)
+    if (out.length >= 5) break
+  }
+  return out
+}
 
 
 function sleep(ms) { return new Promise(r => Timer.schedule(ms, false, r)) }

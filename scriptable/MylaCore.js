@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260812-2325"
+const VERSION = "20260813-2144"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 // 自定义中间形象。文件名以 myladay 开头，跟数据一样受「更新不碰」的保护
