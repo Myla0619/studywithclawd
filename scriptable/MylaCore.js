@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260813-2144"
+const VERSION = "20260813-2214"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 // 自定义中间形象。文件名以 myladay 开头，跟数据一样受「更新不碰」的保护
@@ -83,7 +83,8 @@ function migrate(d) {
     const def = DEFAULT_ACTIVITIES.find(x => x.id === a.id)
     if (def) a.hex = def.hex
   }
-  if (!d.applied) d.applied = {}      // { 会话号: 已执行到第几条 }，跨会话去重用   // 自动切换多久内不许覆盖手动的；0=不保护，-1=完全拒绝
+  if (!d.applied) d.applied = {}      // { 会话号: 已执行到第几条 }，跨会话去重用
+  if (!d.inboxSeen) d.inboxSeen = {}  // { 队列条目id: 1 }，微信收件箱去重用   // 自动切换多久内不许覆盖手动的；0=不保护，-1=完全拒绝
   if (!d.ui) d.ui = { span: 7, chart: "bar" }
   d.v = SCHEMA
   return d

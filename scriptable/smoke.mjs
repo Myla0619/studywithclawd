@@ -221,7 +221,12 @@ const Timer = { schedule: (ms, rep, cb) => setTimeout(cb, 0) }
 const Request = class {
   constructor(u) { this.url = u; this.headers = {} }
   async loadJSON() { throw new Error("离线") }
-  async loadString() { throw new Error("离线") }
+  async loadString() {
+    if (SCENARIO.inbox && this.url.indexOf("api.github.com") >= 0) {
+      return JSON.stringify(SCENARIO.inbox)
+    }
+    throw new Error("离线")
+  }
 }
 const DocumentPicker = { exportFile: async () => {} }
 const Device = {
@@ -354,6 +359,26 @@ await runMyla("   同一段再发一次（不该重复）", {
 d = C.load()
 if ((d.todos[tk] || []).length !== 2) { console.log("     ❌ 重复添加了"); process.exit(1) }
 console.log("     ✓ 拆条、去客套、去重都对")
+
+// ⑧ 微信收件箱：bot 写的队列，打开 app 时拉取合并、按 id 去重
+disk = {}; store = {}
+disk["/docs/myladay.inbox.json"] = JSON.stringify({ repo: "liuliu-21/myla-inbox", token: "github_pat_x" })
+const INBOX = { items: [
+  { id: "w1", text: "下周三前把改完的稿子发导师", at: 1 },
+  { id: "w2", text: "订周五组会的教室", at: 2 }
+]}
+await runMyla("⑧ 打开时拉微信收件箱", { inbox: INBOX })
+d = C.load()
+const it = (d.todos[tk] || []).map(x => x.text)
+console.log("     → 清单：" + (it.join("、") || "空"))
+if (it.length !== 2) { console.log("     ❌ 没合并进来"); process.exit(1) }
+INBOX.items.push({ id: "w3", text: "买打印纸", at: 3 })
+await runMyla("   再开一次（老的不重复、新的进来）", { inbox: INBOX })
+d = C.load()
+const it2 = (d.todos[tk] || []).map(x => x.text)
+console.log("     → 清单：" + it2.join("、"))
+if (it2.length !== 3) { console.log("     ❌ 去重或增量不对"); process.exit(1) }
+console.log("     ✓ 合并、去重、增量都对")
 
 console.log("\n弹过的窗：" + (alerts.filter(Boolean).join(" / ") || "（没有）"))
 console.log("\n全部跑通 ✅")

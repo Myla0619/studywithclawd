@@ -134,6 +134,7 @@ if (incoming) {
   // 更新放在开界面之前，因为「关窗口之后」那个位置对上划退出 app 的人根本不会跑，
   // 于是永远更不到新版。这里最多六小时查一次，静默下载不打断你，下次打开生效。
   await selfUpdate(false)
+  await pullInbox(false)     // 微信 bot 抽的待办，静默拉一把
   // 上次可能留着没落盘的操作（点了东西然后被杀），先捞回来
   await drainPending()
   // 定案，不再改：主界面是 UITable，所有写操作点一下当场 C.save——
@@ -284,6 +285,7 @@ function drawTable(t, defer) {
     })
   }
   deferAction(t, defer, "中间的形象 · " + (data.avatarOn ? "自己的图" : "Clawd"), null, () => avatarFlow())
+  deferAction(t, defer, "微信收件箱 · " + (inboxConfig() ? "已连" : "没配"), null, () => inboxSetup())
   deferAction(t, defer, "管理状态", null, () => manageActs())
   deferAction(t, defer, "定时问一句 · " + (data.nudgeMinutes === 0 ? "关着"
     : (data.nudgeMinutes || 90) + " 分钟"), null, () => setNudge())
@@ -392,6 +394,78 @@ async function newAct() {
   data.activities.push({ id: "c" + uid().slice(0, 6), name: v,
     hex: pal[data.activities.length % pal.length] })
   persist("加状态")
+}
+
+/**
+ * 拉微信收件箱：Mac 上的 bot 把 Claude 抽好的待办推进私有仓库的 inbox.json，
+ * 这里每次打开拉一把，按条目 id 去重后并进今天的清单。
+ * 配置存在 myladay.inbox.json（本地文件，含只读 token，不进任何仓库）。
+ */
+function inboxConfig() {
+  const fmL = FileManager.local()
+  const p = fmL.joinPath(fmL.documentsDirectory(), "myladay.inbox.json")
+  try { return JSON.parse(fmL.readString(p)) } catch (e) { return null }
+}
+async function pullInbox(loud) {
+  const cfg = inboxConfig()
+  if (!cfg || !cfg.repo || !cfg.token) {
+    if (loud) await toast("还没配置", "先在「微信收件箱」里填仓库和 token")
+    return
+  }
+  try {
+    const r = new Request("https://api.github.com/repos/" + cfg.repo + "/contents/inbox.json")
+    r.headers = {
+      "Authorization": "Bearer " + cfg.token,
+      "Accept": "application/vnd.github.raw+json",
+      "User-Agent": "Myla"
+    }
+    r.timeoutInterval = loud ? 15 : 6
+    const j = JSON.parse(await r.loadString())
+    const key = C.dayKey()
+    const list = data.todos[key] || (data.todos[key] = [])
+    const added = []
+    for (const it of (j.items || [])) {
+      if (!it || !it.id || !it.text) continue
+      if (data.inboxSeen[it.id]) continue
+      data.inboxSeen[it.id] = 1
+      if (!list.some(x => x.text === it.text && !x.done)) {
+        list.push({ id: uid(), text: it.text, done: false })
+        added.push(it.text)
+      }
+    }
+    // 去重账本别无限长
+    const seen = Object.keys(data.inboxSeen)
+    if (seen.length > 300) for (const k of seen.slice(0, seen.length - 300)) delete data.inboxSeen[k]
+    if (added.length) {
+      persist("微信收件箱")
+      const n = new Notification()
+      n.title = "微信收进 " + added.length + " 条"
+      n.body = added.join("\n")
+      n.schedule()
+    }
+    if (loud) await toast(added.length ? "收进 " + added.length + " 条" : "没有新的", added.join("\n"))
+  } catch (e) {
+    if (loud) await toast("拉取失败", (e && e.message) || String(e))
+    /* 静默模式失败就算了，下次打开再试 */
+  }
+}
+async function inboxSetup() {
+  const cfg = inboxConfig() || {}
+  const al = new Alert()
+  al.title = "微信收件箱"
+  al.message = "Mac 上的 bot 往私有仓库写待办，这里拉取。\ntoken 只需要那个仓库的只读权限，存在本机。"
+  al.addTextField("仓库（如 liuliu-21/myla-inbox）", cfg.repo || "liuliu-21/myla-inbox")
+  al.addTextField("只读 token（github_pat_ 开头）", cfg.token || "")
+  al.addAction("保存并试拉一次")
+  if (cfg.repo) al.addDestructiveAction("清掉配置")
+  al.addCancelAction("取消")
+  const i = await al.present()
+  if (i < 0) return
+  const fmL = FileManager.local()
+  const p = fmL.joinPath(fmL.documentsDirectory(), "myladay.inbox.json")
+  if (i === 1) { try { fmL.remove(p) } catch (e) {}; return }
+  fmL.writeString(p, JSON.stringify({ repo: al.textFieldValue(0).trim(), token: al.textFieldValue(1).trim() }))
+  await pullInbox(true)
 }
 
 /** 换圆盘中间的形象：从相册选一张图，缩成方块存起来；随时换回 Clawd。 */
