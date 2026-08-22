@@ -375,6 +375,7 @@ enum Hit {
     case resume
     case discard
     case hide
+    case unhide
     case quitApp
 }
 
@@ -385,6 +386,7 @@ final class ClawdView: NSView {
 
     var phase: Phase = .idle
     var collapsed = false
+    var edge = false   // 贴边最小化：只剩边框上一个小舌头
     var t: CGFloat = 0
     var gaze = CGPoint.zero
     var listOffset = 0
@@ -458,6 +460,7 @@ final class ClawdView: NSView {
 
     /// Height the expanded panel needs for the current phase and task count.
     func neededHeight() -> CGFloat {
+        if edge { return 88 }
         if collapsed { return 76 }
         var h: CGFloat = 0
         h += 24            // header
@@ -491,6 +494,9 @@ final class ClawdView: NSView {
         c.clear(bounds)
         hits.removeAll()
 
+        // Edge is the smallest it gets: a little tab on the screen border.
+        // 用户点名要的：缩到最小也必须在边框上看得见——彻底消失过一次就找不回来了。
+        if edge { drawEdgeTab(c); return }
         // Collapsed is a sticker: no card, just Clawd and one line.
         if collapsed { drawCollapsed(c); return }
 
@@ -574,6 +580,45 @@ final class ClawdView: NSView {
     }
 
     /// Sticker-sized: Clawd plus one line, same footprint as the Claude Code pet.
+    /// 贴边小舌头：Clawd 的橙色圆角条，上面一张迷你脸；倒计时跑着的话
+    /// 左侧一条细进度线，扫一眼就知道还剩多少。
+    private func drawEdgeTab(_ c: CGContext) {
+        let body = NSColor(red: 0.91, green: 0.56, blue: 0.41, alpha: 1)      // Clawd 橙
+        let dark = NSColor(red: 0.55, green: 0.32, blue: 0.22, alpha: 1)
+        // 只圆左边两个角，右边贴着屏幕边
+        let r: CGFloat = 10
+        let b = bounds.insetBy(dx: 0, dy: 1)
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: b.maxX, y: b.minY))
+        path.addLine(to: CGPoint(x: b.minX + r, y: b.minY))
+        path.addQuadCurve(to: CGPoint(x: b.minX, y: b.minY + r), control: CGPoint(x: b.minX, y: b.minY))
+        path.addLine(to: CGPoint(x: b.minX, y: b.maxY - r))
+        path.addQuadCurve(to: CGPoint(x: b.minX + r, y: b.maxY), control: CGPoint(x: b.minX, y: b.maxY))
+        path.addLine(to: CGPoint(x: b.maxX, y: b.maxY))
+        path.closeSubpath()
+        c.addPath(path)
+        c.setFillColor(body.cgColor)
+        c.fillPath()
+
+        // 迷你脸：两只方眼睛 + 白肚皮
+        let eyeY = b.maxY - 22
+        c.setFillColor(dark.cgColor)
+        c.fill(CGRect(x: b.minX + 6, y: eyeY, width: 4, height: 5))
+        c.fill(CGRect(x: b.minX + 15, y: eyeY, width: 4, height: 5))
+        c.setFillColor(NSColor(red: 1, green: 0.98, blue: 0.96, alpha: 1).cgColor)
+        let belly = CGRect(x: b.midX - 6, y: eyeY - 20, width: 12, height: 12)
+        c.fillEllipse(in: belly)
+
+        // 倒计时进度：左沿一条细线，从满慢慢缩短
+        if case .running(let ses) = phase {
+            let frac = max(0, min(1, CGFloat(ses.remaining) / CGFloat(max(ses.plannedMin * 60, 1))))
+            c.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
+            c.fill(CGRect(x: b.minX + 2, y: b.minY + 6,
+                          width: 2.5, height: (b.height - 12) * frac))
+        }
+        hits.append((bounds, .unhide))
+    }
+
     private func drawCollapsed(_ c: CGContext) {
         drawClawd(c, cx: bounds.midX, baseY: 30, scale: 0.5)   // px = 3
         let (line, tint) = collapsedLine()
@@ -988,6 +1033,8 @@ final class ClawdView: NSView {
     override func mouseDown(with e: NSEvent) {
         let p = convert(e.locationInWindow, from: nil)
 
+        if edge { onHit?(.unhide); return }        // 小舌头就一个功能：点了回来
+
         if collapsed {
             // Single click drags it; only a double click brings the panel back,
             // so repositioning never expands it by accident.
@@ -1012,7 +1059,7 @@ final class ClawdView: NSView {
 
     override func rightMouseDown(with e: NSEvent) {
         let menu = NSMenu()
-        menu.addItem(withTitle: "隐藏（计时继续走）",
+        menu.addItem(withTitle: edge ? "回来" : "贴边收起（计时继续走）",
                      action: #selector(menuHide), keyEquivalent: "").target = self
         menu.addItem(withTitle: collapsed ? "展开" : "收起成贴纸",
                      action: #selector(menuFold), keyEquivalent: "").target = self
@@ -1022,7 +1069,7 @@ final class ClawdView: NSView {
         NSMenu.popUpContextMenu(menu, with: e, for: self)
     }
 
-    @objc private func menuHide() { onHit?(.hide) }
+    @objc private func menuHide() { onHit?(edge ? .unhide : .hide) }
     @objc private func menuFold() { onHit?(collapsed ? .expand : .collapse) }
     @objc private func menuQuit() { onHit?(.quitApp) }
 
@@ -1100,7 +1147,8 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
         restoreSession()
         view.collapsed = FileManager.default.fileExists(atPath: root + "/collapsed")
-        resize()                                   // settle the size for this phase first
+        resize()
+        if FileManager.default.fileExists(atPath: root + "/hidden") { enterEdge() }
         if let tl = savedTopLeft() {
             window.setFrameOrigin(NSPoint(x: tl.x, y: tl.y - window.frame.height))
         } else {
@@ -1132,6 +1180,7 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             try? FileManager.default.removeItem(atPath: root + "/collapsed")
             try? FileManager.default.removeItem(atPath: root + "/hidden")
             view.collapsed = false
+            view.edge = false
             resize()
             window.setFrameOrigin(defaultPos())
             clampOnScreen()
@@ -1140,8 +1189,8 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         }
 
         let wantHidden = FileManager.default.fileExists(atPath: root + "/hidden")
-        if wantHidden && window.isVisible { window.orderOut(nil) }
-        if !wantHidden && !window.isVisible { window.orderFrontRegardless() }
+        if wantHidden != view.edge { wantHidden ? enterEdge() : exitEdge() }
+        if !window.isVisible { window.orderFrontRegardless() }   // 任何状态都不许彻底消失
 
         view.t += 1.0 / 10.0
         view.animate = FileManager.default.fileExists(
@@ -1173,7 +1222,7 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     private func resize() {
         let h = view.neededHeight()
-        let w: CGFloat = view.collapsed ? 112 : 308
+        let w: CGFloat = view.edge ? 26 : (view.collapsed ? 112 : 308)
         guard abs(window.frame.height - h) > 0.5 || abs(window.frame.width - w) > 0.5 else { return }
 
         // Keep the top-left corner put, so collapsing lands somewhere predictable.
@@ -1183,7 +1232,7 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         view.frame = NSRect(x: 0, y: 0, width: w, height: h)
         view.field.isHidden = view.collapsed
 
-        window.hasShadow = !view.collapsed      // the sticker has no card to cast one
+        window.hasShadow = !(view.collapsed || view.edge)
         window.invalidateShadow()
 
         clampOnScreen()
@@ -1195,7 +1244,9 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             ?? NSScreen.main ?? NSScreen.screens[0]
         let vf = screen.visibleFrame
         var o = window.frame.origin
-        o.x = min(max(o.x, vf.minX + 4), max(vf.minX + 4, vf.maxX - window.frame.width - 4))
+        // 贴边模式就是要顶着屏幕右缘，不留 4px 缝
+        if view.edge { o.x = vf.maxX - window.frame.width }
+        else { o.x = min(max(o.x, vf.minX + 4), max(vf.minX + 4, vf.maxX - window.frame.width - 4)) }
         o.y = min(max(o.y, vf.minY + 4), max(vf.minY + 4, vf.maxY - window.frame.height - 4))
         if o != window.frame.origin { window.setFrameOrigin(o) }
     }
@@ -1242,9 +1293,14 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             if case .paused = phase { clearSession(); phase = .idle }
 
         case .hide:
-            // Out of sight, still running — a countdown in flight keeps counting.
+            // 最小也要看得见：不再整个消失（消失过一次就再也找不回来了），
+            // 贴到屏幕右边框上当个小舌头。计时照走。
             FileManager.default.createFile(atPath: root + "/hidden", contents: nil)
-            window.orderOut(nil)
+            enterEdge()
+
+        case .unhide:
+            try? FileManager.default.removeItem(atPath: root + "/hidden")
+            exitEdge()
 
         case .quitApp:
             NSApp.terminate(nil)
@@ -1341,6 +1397,36 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             // Waits for you to say so rather than picking up where it left off.
             phase = .paused(s)
         }
+    }
+
+    /// 进贴边：记住现在的位置，缩成小舌头吸到屏幕右缘（高度跟着原来的位置走）。
+    private var edgeReturn: NSPoint?
+    private func enterEdge() {
+        if !view.edge { edgeReturn = NSPoint(x: window.frame.minX, y: window.frame.maxY) }
+        view.edge = true
+        resize()
+        let screen = NSScreen.screens.first { $0.frame.intersects(window.frame) }
+            ?? NSScreen.main ?? NSScreen.screens[0]
+        let vf = screen.visibleFrame
+        let top = min(max(window.frame.maxY, vf.minY + 120), vf.maxY - 8)
+        window.setFrameOrigin(NSPoint(x: vf.maxX - window.frame.width,
+                                      y: top - window.frame.height))
+    }
+
+    /// 出贴边：回到收起前的位置。
+    private func exitEdge() {
+        guard view.edge else { return }
+        view.edge = false
+        resize()
+        if let r = edgeReturn {
+            window.setFrameOrigin(NSPoint(x: r.x, y: r.y - window.frame.height))
+        } else if let tl = savedTopLeft() {
+            window.setFrameOrigin(NSPoint(x: tl.x, y: tl.y - window.frame.height))
+        } else {
+            window.setFrameOrigin(defaultPos())
+        }
+        clampOnScreen()
+        window.orderFrontRegardless()
     }
 
     private func defaultPos() -> NSPoint {
