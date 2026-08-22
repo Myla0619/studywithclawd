@@ -464,7 +464,7 @@ final class ClawdView: NSView {
     /// Height the expanded panel needs for the current phase and task count.
     func neededHeight() -> CGFloat {
         if edge { return 88 }
-        if collapsed { return 76 }
+        if collapsed { return 150 }        // 桌子带 + 状态条
         var h: CGFloat = 0
         h += 24            // header
         h += 116           // clawd
@@ -623,9 +623,11 @@ final class ClawdView: NSView {
     }
 
     private func drawCollapsed(_ c: CGContext) {
-        drawClawd(c, cx: bounds.midX, baseY: 30, scale: 0.5)   // px = 3
+        // 收起 = 只留「陪你一起」这条桌子带：台灯、书、电脑、绿植、Clawd 坐在架子后面，
+        // 砍掉清单和计时按钮。用户指着运行面板顶端那一条说「缩小了也要有这个」。
+        drawClawd(c, cx: bounds.midX, baseY: 42, scale: 1.0)   // px = 3，跟全面板同一套场景
         let (line, tint) = collapsedLine()
-        pill(c, line, cx: bounds.midX, cy: 14, bg: tint)
+        pill(c, line, cx: bounds.midX, cy: 16, bg: tint)
     }
 
     private func collapsedLine() -> (String, NSColor) {
@@ -939,7 +941,7 @@ final class ClawdView: NSView {
         }
 
         let buff = store?.isBuff ?? false
-        let scene = !collapsed && Scene.enabled
+        let scene = Scene.enabled          // 收起态也保留桌子带
         let body = ClawdSprites.body(face, pose: pose, buff: buff)
         let sz = body.size(px: px)
         let x = cx - sz.width / 2 + shiftX * px
@@ -954,7 +956,7 @@ final class ClawdView: NSView {
         body.draw(c, at: CGPoint(x: x, y: y), px: px)
 
         // Something in its hands while you work — otherwise it just sits there.
-        if case .running = phase, !collapsed {
+        if case .running = phase {
             switch prop {
             case .laptop:
                 // Overlaps the body by 3 cells so both eyes stay clear of it.
@@ -1227,7 +1229,7 @@ final class Clawd: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     private func resize() {
         let h = view.neededHeight()
-        let w: CGFloat = view.edge ? 26 : (view.collapsed ? 112 : 308)
+        let w: CGFloat = view.edge ? 26 : (view.collapsed ? 280 : 308)
         guard abs(window.frame.height - h) > 0.5 || abs(window.frame.width - w) > 0.5 else { return }
 
         // Keep the top-left corner put, so collapsing lands somewhere predictable.
