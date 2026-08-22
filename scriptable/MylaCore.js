@@ -7,7 +7,7 @@
 // 肉眼看不出折线。
 
 const fm = FileManager.local()
-const VERSION = "20260813-2214"
+const VERSION = "20260822-2035"
 const SCHEMA = 1
 const DATA = fm.joinPath(fm.documentsDirectory(), "myladay.json")
 // 自定义中间形象。文件名以 myladay 开头，跟数据一样受「更新不碰」的保护
@@ -85,6 +85,7 @@ function migrate(d) {
   }
   if (!d.applied) d.applied = {}      // { 会话号: 已执行到第几条 }，跨会话去重用
   if (!d.inboxSeen) d.inboxSeen = {}  // { 队列条目id: 1 }，微信收件箱去重用   // 自动切换多久内不许覆盖手动的；0=不保护，-1=完全拒绝
+  if (!d.goals) d.goals = []          // [{id, name, hex, done}]，长期目标树，完成相关待办浇水长大
   if (!d.ui) d.ui = { span: 7, chart: "bar" }
   d.v = SCHEMA
   return d
@@ -342,6 +343,63 @@ function drawCountdowns(data, w, h, opts) {
   })
 
   return ctx.getImage()
+}
+
+// ---------------------------------------------------------------- 目标树
+// 完成 25 条相关待办 = 开花。曲线：种子0 → 嫩苗1 → 小树5 → 大树12 → 开花25。
+// 靠真实完成的待办长大，不是凭感觉点——跟「别造假数据」一致。
+
+const GOAL_TARGET = 25
+const GOAL_STEPS = [0, 1, 5, 12, 25]   // 到这些数就进下一阶段
+const GOAL_NAMES = ["种子", "嫩苗", "小树", "大树", "开花结果"]
+
+function goalStage(done) {
+  let st = 0
+  for (let i = 0; i < GOAL_STEPS.length; i++) if (done >= GOAL_STEPS[i]) st = i
+  return st
+}
+
+// 五个阶段的字符网格。t/T 树干，g/G 叶，f 花，r 果，s/d 土。
+const TREE_GRIDS = [
+  [ // 种子
+    "..........","..........","..........","..........",
+    "..........","..........","....G.....","....g.....",
+    "ssssssssss","dddddddddd"],
+  [ // 嫩苗
+    "..........","..........","..........","...GG.....",
+    "..GggG....","...gg.....","...tt.....","...tt.....",
+    "ssssssssss","dddddddddd"],
+  [ // 小树
+    "..........","...GGG....","..GgggG...",".GgGGggG..",
+    "..GgggG...","...ttt....","...tTt....","...ttt....",
+    "ssssssssss","dddddddddd"],
+  [ // 大树
+    "..GGGG....",".GggggG...","GgGGGggG..","GggGgggG..",
+    ".GggggG...","..GttG....","...tTt....","...tTt....",
+    "ssssssssss","dddddddddd"],
+  [ // 开花结果
+    ".fGGGGf...",".GggggGr..","GgGrGggG..","GggGgggG..",
+    "rGgggfG...","..GttG....","...tTt....","...tTt....",
+    "ssssssssss","dddddddddd"]
+]
+const TREE_PAL = {
+  t: "#8A5A3C", T: "#6B4530", g: "#3AA05A", G: "#5FCB7C",
+  f: "#F58EB5", r: "#F0653F", s: "#6B4A34", d: "#4A3728"
+}
+
+/** 画一棵树。cx 水平中心，topY 网格顶部，cell 每格边长。10x10 网格。 */
+function drawTree(ctx, cx, topY, cell, stage) {
+  const grid = TREE_GRIDS[Math.max(0, Math.min(4, stage))]
+  const x0 = cx - 5 * cell
+  for (let y = 0; y < grid.length; y++) {
+    const row = grid[y]
+    for (let x = 0; x < row.length; x++) {
+      const c = TREE_PAL[row[x]]
+      if (!c) continue
+      ctx.setFillColor(new Color(c))
+      ctx.fillRect(new Rect(x0 + x * cell, topY + y * cell, cell + 0.5, cell + 0.5))
+    }
+  }
 }
 
 // ---------------------------------------------------------------- 绘制
@@ -728,5 +786,6 @@ module.exports = {
   VERSION, DATA, BAK, SCHEMA, load, save, dayKey, startOfDay, segments, openSegment, rollover,
   switchTo, autoSwitch, splitSegment, duration, totals, hhmm, clock, activityOf,
   AVATAR, drawDial, drawDonut, drawClawd, drawCountdowns, untilDays, sortedCountdowns,
-  CD_PALETTE, DEFAULT_ACTIVITIES, DATA
+  CD_PALETTE, GOAL_TARGET, GOAL_STEPS, GOAL_NAMES, goalStage, drawTree,
+  DEFAULT_ACTIVITIES, DATA
 }

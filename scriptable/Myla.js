@@ -229,6 +229,7 @@ function drawTable(t, defer) {
     r.onSelect = () => {
       it.done = !it.done
       it.doneAt = it.done ? Date.now() : null
+      creditGoal(it, it.done ? 1 : -1)   // 绑了目标就给那棵树浇水/收回
       persist("清单打勾")
       drawTable(t, defer); t.reload()
     }
@@ -242,11 +243,27 @@ function drawTable(t, defer) {
     if (await al.present() < 0) return
     const v = (al.textFieldValue(0) || "").trim()
     if (!v) return
+    let goal = null
+    if (data.goals.length) goal = await pickGoal()
     const key2 = C.dayKey()
     const l2 = data.todos[key2] || (data.todos[key2] = [])
-    l2.push({ id: uid(), text: v, done: false })
+    l2.push({ id: uid(), text: v, done: false, goal: goal })
     persist("加清单")
   })
+
+  head(t, "目标 · 完成相关待办浇水长大")
+  if (!data.goals.length) note(t, "还没有目标，立一个试试")
+  for (const g of data.goals) {
+    const r = new UITableRow()
+    r.dismissOnSelect = true
+    r.height = 66
+    r.__label = g.name
+    r.addImage(goalPill(g)).centerAligned()
+    const gRef = g
+    r.onSelect = () => defer(() => editGoal(gRef))
+    t.addRow(r)
+  }
+  deferAction(t, defer, "＋ 立一个目标", "#7DD73C", () => editGoal(null))
 
   head(t, "倒数日")
   const cds = C.sortedCountdowns(data, now)
@@ -641,6 +658,78 @@ function cdPill(it) {
   return ctx.getImage()
 }
 
+/** 目标胶囊：左边一棵会长大的树，右边名字 + X/25 进度条。 */
+function goalPill(g) {
+  const W = uiWidth(), H = 62, u = UI()
+  const done = g.done || 0
+  const ctx = pillCtx(W, H)
+  rr(ctx, 0, 0, W, H, 15, u.card)
+  // 树画在左侧一个小方块里
+  C.drawTree(ctx, 34, 6, 5, C.goalStage(done))
+  // 名字
+  ctx.setTextAlignedLeft()
+  ctx.setFont(Font.semiboldSystemFont(16))
+  ctx.setTextColor(new Color(u.ink, 0.95))
+  ctx.drawTextInRect(g.name, new Rect(66, 12, W - 66 - 14, 20))
+  // 进度条
+  const bx = 66, bw = W - 66 - 14, by = H - 22
+  rr(ctx, bx, by, bw, 7, 3.5, u.ink, 0.12)
+  const frac = Math.max(0, Math.min(1, done / C.GOAL_TARGET))
+  if (frac > 0) rr(ctx, bx, by, Math.max(7, bw * frac), 7, 3.5, g.hex || "#3AA05A")
+  ctx.setTextAlignedRight()
+  ctx.setFont(Font.systemFont(12))
+  ctx.setTextColor(new Color(u.ink, 0.5))
+  ctx.drawTextInRect(done + " / " + C.GOAL_TARGET, new Rect(bx, by - 18, bw, 15))
+  return ctx.getImage()
+}
+
+/** 给待办绑定的目标记账。delta = +1 完成 / -1 撤销。 */
+function creditGoal(todo, delta) {
+  if (!todo || !todo.goal) return
+  const g = data.goals.find(x => x.id === todo.goal)
+  if (!g) return
+  g.done = Math.max(0, (g.done || 0) + delta)
+}
+
+/** 加待办时选一个目标（可以不选）。 */
+async function pickGoal() {
+  const al = new Alert()
+  al.title = "算进哪个目标？"
+  al.message = "完成这条会给那棵树浇水。不选也行。"
+  for (const g of data.goals) al.addAction(g.name)
+  al.addCancelAction("不绑定")
+  const i = await al.present()
+  return i < 0 ? null : data.goals[i].id
+}
+
+/** 立 / 改一个目标。 */
+async function editGoal(g) {
+  const al = new Alert()
+  al.title = g ? g.name : "立一个目标"
+  al.message = "比如「实习」「科研」。完成绑定它的待办，树就长大，25 条开花。"
+  al.addTextField("目标名字", g ? g.name : "")
+  al.addAction(g ? "改好了" : "立下")
+  if (g) al.addDestructiveAction("删掉这个目标")
+  al.addCancelAction("取消")
+  const i = await al.present()
+  if (i < 0) return
+  if (g && i === 1) {
+    // 删目标不动待办，只是那些待办的 goal 变成悬空（记账已经发生过，不回退）
+    data.goals = data.goals.filter(x => x.id !== g.id)
+    persist("删目标"); return
+  }
+  const name = (al.textFieldValue(0) || "").trim()
+  if (!name) return
+  if (g) { g.name = name }
+  else {
+    const used = data.goals.map(x => x.hex)
+    const pal = ["#3AA05A", "#F5822F", "#5464DE", "#B05AE2", "#F566AD", "#40BBE7"]
+    const hex = pal.find(h => used.indexOf(h) < 0) || pal[data.goals.length % pal.length]
+    data.goals.push({ id: uid(), name: name, hex: hex, done: 0 })
+  }
+  persist(g ? "改目标" : "立目标")
+}
+
 function head(t, text) {
   const r = new UITableRow()
   r.isHeader = true
@@ -927,7 +1016,7 @@ function apply(m) {
       break
 
     case "todo.add":
-      todos.push({ id: m.v2, text: m.v, done: false })
+      todos.push({ id: m.v2, text: m.v, done: false, goal: m.v3 || null })
       break
     case "todo.toggle": {
       const it = todos.find(x => x.id === m.v)

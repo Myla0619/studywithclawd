@@ -360,6 +360,18 @@ d = C.load()
 if ((d.todos[tk] || []).length !== 2) { console.log("     ❌ 重复添加了"); process.exit(1) }
 console.log("     ✓ 拆条、去客套、去重都对")
 
+// 目标板块：有目标 + 绑定的完成待办，打开 app 要能画出树不崩
+disk = {}; store = {}
+disk["/docs/myladay.json"] = JSON.stringify({ v:1, days:{}, todos:{},
+  goals:[{id:"g1",name:"科研",hex:"#3AA05A",done:8}] })
+await runMyla("⑧ 有目标时打开 app（画树）", { taps: async t => {} })
+{
+  const dd = C.load()
+  console.log("     → 目标：" + (dd.goals||[]).map(g=>g.name+" "+g.done+"/25 阶段"+C.goalStage(g.done)).join("、"))
+  if (!(dd.goals||[]).length || C.goalStage(dd.goals[0].done)!==2) { console.log("     ❌ 目标丢了或阶段不对"); process.exit(1) }
+  console.log("     ✓ 树画出来了，阶段对（8→小树）")
+}
+
 // ⑧ 微信收件箱：bot 写的队列，打开 app 时拉取合并、按 id 去重
 disk = {}; store = {}
 disk["/docs/myladay.inbox.json"] = JSON.stringify({ repo: "liuliu-21/myla-inbox", token: "github_pat_x" })
