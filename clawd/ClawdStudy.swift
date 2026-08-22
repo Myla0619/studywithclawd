@@ -423,9 +423,12 @@ final class ClawdView: NSView {
     /// Runs one beat at a time, with a random gap in between.
     func stepBeats() {
         // Beats fire on their own during a sitting — they are occasional one-offs,
-        // not the looping ambient motion that `animate` controls. Every other
-        // phase stays completely still.
-        guard case .running = phase else {
+        // not the looping ambient motion that `animate` controls.
+        // 贴纸态不能当死物：待命/暂停/歇着也偶尔眨眼、张望、打个瞌睡。
+        // 展开面板保持原来的克制（只有专注时动），那是特意为 ADHD 收敛过的。
+        var lively = collapsed
+        if case .running = phase { lively = true }
+        guard lively else {
             beat = nil
             nextBeat = t + 4
             return
@@ -872,7 +875,7 @@ final class ClawdView: NSView {
         var shiftX: CGFloat = 0
         var showCup = false, showZzz = false, showBang = false
 
-        if animate, t.truncatingRemainder(dividingBy: 3.4) < 0.13 { face = .blink }
+        if animate || collapsed, t.truncatingRemainder(dividingBy: 3.4) < 0.13 { face = .blink }
 
         switch phase {
         case .idle, .picking:
@@ -890,16 +893,18 @@ final class ClawdView: NSView {
             }
         case .stopped:
             face = .open
+            showCup = true                       // 歇会儿就真端杯子歇
         case .paused:
-            face = .open
+            face = .sad                          // 被打断了，蔫一点
         }
 
         // A random little action, so supervising is not one frozen pose.
-        if case .running = phase, let b = beat {
+        if let b = beat {
+            let base = face
             let p = t - beatAt
             switch b {
             case .blink2:
-                face = (p < 0.14 || (p > 0.30 && p < 0.44)) ? .blink : .narrow
+                face = (p < 0.14 || (p > 0.30 && p < 0.44)) ? .blink : base
             case .lean:
                 pose = (p > 0.25 && p < 1.5) ? .squat : .normal      // leans in at you
             case .stretch:
@@ -908,11 +913,11 @@ final class ClawdView: NSView {
             case .sip:
                 showCup = true
                 shiftX = (p > 0.5 && p < 1.9) ? 1 : 0
-                face = (p > 0.6 && p < 1.7) ? .blink : .narrow
+                face = (p > 0.6 && p < 1.7) ? .blink : base
             case .tap:
                 lift = sin(p * 22) > 0 ? 1 : 0                        // impatient drumming
             case .lookAway:
-                face = p < 0.6 ? .lookLeft : (p < 1.3 ? .lookRight : .narrow)
+                face = p < 0.6 ? .lookLeft : (p < 1.3 ? .lookRight : base)
             case .doze:
                 if p < 2.4 {
                     showZzz = true
@@ -1000,7 +1005,7 @@ final class ClawdView: NSView {
                 let rise = min(CGFloat(4), (q * 4).rounded()) * px * 0.5
                 let px2 = px * (i == 0 ? 0.7 : (i == 1 ? 1.0 : 1.3))
                 let at = collapsed
-                    ? CGPoint(x: x + sz.width - px * 2 + CGFloat(i) * px * 1.6,
+                    ? CGPoint(x: x + sz.width - px * 4 + CGFloat(i) * px * 1.2,
                               y: y + sz.height - px * 12 + rise)
                     : CGPoint(x: x + sz.width - px * 6 + CGFloat(i) * px * 2.8,
                               y: y + sz.height - px * 2 + rise)
@@ -1533,7 +1538,17 @@ func renderSheet(to path: String) {
                                   giveups: 0, t: 0.9)),
         ("提前停下之后", renderPanel(.stopped(Date()), collapsed: false, tasks: tasks,
                              giveups: 2, t: 0.9)),
-        ("收起", renderPanel(.running(running), collapsed: true, tasks: tasks, giveups: 0, t: 0.9))
+        ("收起·专注", renderPanel(.running(running), collapsed: true, tasks: tasks, giveups: 0, t: 0.9)),
+        ("收起·待命", renderPanel(.idle, collapsed: true, tasks: tasks, giveups: 0, t: 0.9)),
+        ("收起·待命张望", renderPanel(.idle, collapsed: true, tasks: tasks, giveups: 0, t: 5.0)
+            { $0.debugBeat(.lookAway, at: 0.3) }),
+        ("收起·打瞌睡", renderPanel(.idle, collapsed: true, tasks: tasks, giveups: 0, t: 9.0)
+            { $0.debugBeat(.doze, at: 1.0) }),
+        ("收起·喝一口", renderPanel(.running(running), collapsed: true, tasks: tasks, giveups: 0, t: 7.0)
+            { $0.debugBeat(.sip, at: 1.0) }),
+        ("收起·暂停", renderPanel(.paused(running), collapsed: true, tasks: tasks, giveups: 0, t: 0.9)),
+        ("收起·歇会儿", renderPanel(.stopped(Date()), collapsed: true, tasks: tasks, giveups: 0, t: 0.9)),
+        ("收起·时间到", renderPanel(.finished(finished), collapsed: true, tasks: tasks, giveups: 1, t: 0.5))
     ]
 
     let gap: CGFloat = 14, labelH: CGFloat = 20
